@@ -562,9 +562,9 @@ const Workspace = (() => {
     els.cancelTextBtn.addEventListener("click", cancelTextPlacement);
     els.confirmTextBtn.addEventListener("click", confirmTextPlacement);
 
-    els.measurementModal.querySelectorAll("[data-denominator]").forEach(button => {
+    els.measurementModal.querySelectorAll("[data-fraction]").forEach(button => {
       button.addEventListener("click", () => {
-        appendMeasurementDenominator(button.dataset.denominator);
+        appendMeasurementFraction(button.dataset.fraction);
       });
     });
 
@@ -2242,32 +2242,53 @@ const Workspace = (() => {
     setMeasurementRawValue(base + value);
   }
 
-  function appendMeasurementDenominator(denominator) {
+  function appendMeasurementFraction(fraction) {
     /*
-      Example:
-      3 + /8  -> 3/8
-      26_3 + /8 -> 26_3/8
+      Fast fraction entry:
+      26 + 3/8  -> 26 3/8
+      -26 + 1/2 -> -26 1/2
+      empty + 1/4 -> 1/4
 
-      If the current value already ends in a completed fraction, the button
-      starts a new fraction after a visible space.
+      If a fraction is already present, tapping another fraction replaces it.
+      This makes corrections a single tap and prevents invalid double fractions.
     */
-    let nextValue = measurementRawValue;
+    const selectedFraction = String(fraction || "").trim();
+    if (!/^\d+\/\d+$/.test(selectedFraction)) return;
 
-    if (!nextValue) {
-      setMeasurementRawValue("1/" + denominator);
+    let current = measurementRawValue.toUpperCase() === "X"
+      ? ""
+      : String(measurementRawValue || "").trim();
+
+    if (!current) {
+      setMeasurementRawValue(selectedFraction);
       return;
     }
 
-    const lastToken = nextValue.split(" ").pop();
-
-    if (lastToken.includes("/")) {
-      if (!nextValue.endsWith(" ")) nextValue += " ";
-      nextValue += "1/" + denominator;
-    } else {
-      nextValue += "/" + denominator;
+    if (current === "-") {
+      setMeasurementRawValue("-" + selectedFraction);
+      return;
     }
 
-    setMeasurementRawValue(nextValue);
+    // Whole number only: insert the missing space automatically.
+    if (/^-?\d+$/.test(current)) {
+      setMeasurementRawValue(current + " " + selectedFraction);
+      return;
+    }
+
+    // Mixed number already has a fraction: replace that fraction.
+    if (/^-?\d+\s+\d+\/\d+$/.test(current)) {
+      setMeasurementRawValue(current.replace(/\d+\/\d+$/, selectedFraction));
+      return;
+    }
+
+    // Bare fraction already entered: replace it while preserving a minus sign.
+    if (/^-?\d+\/\d+$/.test(current)) {
+      setMeasurementRawValue(current.startsWith("-") ? "-" + selectedFraction : selectedFraction);
+      return;
+    }
+
+    // Safe fallback for any partially edited whole number.
+    setMeasurementRawValue(current + " " + selectedFraction);
   }
 
   function measurementBackspace() {

@@ -413,31 +413,45 @@
           </div>
         </div>
 
-        <div class="v6MainGrid">
-          <button data-key="7">7</button>
-          <button data-key="8">8</button>
-          <button data-key="9">9</button>
-          <button data-action="backspace" class="operatorButton deleteButton tallDelete" title="Backspace">⌫</button>
-          <button data-denominator="2" class="fractionButton">/2</button>
+        <div class="v6MainGrid fractionKeypadGrid">
+          <div class="numberPad">
+            <button data-key="7">7</button>
+            <button data-key="8">8</button>
+            <button data-key="9">9</button>
 
-          <button data-key="4">4</button>
-          <button data-key="5">5</button>
-          <button data-key="6">6</button>
-          <button data-denominator="4" class="fractionButton">/4</button>
+            <button data-key="4">4</button>
+            <button data-key="5">5</button>
+            <button data-key="6">6</button>
 
-          <button data-key="1">1</button>
-          <button data-key="2">2</button>
-          <button data-key="3">3</button>
-          <button data-action="clear" class="clearButton" title="Clear all">Clear</button>
-          <button data-denominator="8" class="fractionButton">/8</button>
+            <button data-key="1">1</button>
+            <button data-key="2">2</button>
+            <button data-key="3">3</button>
 
-          <button data-key="/" class="operatorButton">/</button>
-          <button data-key="0">0</button>
-          <button data-action="negative" class="operatorButton">−</button>
-          <button data-key="X" id="missingValueBtn" class="missingValueButton" type="button">X</button>
-          <button data-denominator="16" class="fractionButton">/16</button>
+            <button data-action="negative" class="operatorButton">−</button>
+            <button data-key="0">0</button>
+            <button data-key="X" id="missingValueBtn" class="missingValueButton" type="button">X</button>
 
-          <button data-key=" " class="spaceButton gridSpaceButton">SPACE</button>
+            <button data-action="backspace" class="operatorButton deleteButton" title="Backspace">⌫</button>
+            <button data-action="clear" class="clearButton" title="Clear all">Clear</button>
+          </div>
+
+          <div class="quickFractionPad" aria-label="Quick fractions">
+            <button data-fraction="1/16">1/16</button>
+            <button data-fraction="3/16">3/16</button>
+            <button data-fraction="5/16">5/16</button>
+            <button data-fraction="7/16">7/16</button>
+            <button data-fraction="9/16">9/16</button>
+            <button data-fraction="11/16">11/16</button>
+            <button data-fraction="13/16">13/16</button>
+            <button data-fraction="15/16">15/16</button>
+            <button data-fraction="1/8">1/8</button>
+            <button data-fraction="3/8">3/8</button>
+            <button data-fraction="5/8">5/8</button>
+            <button data-fraction="7/8">7/8</button>
+            <button data-fraction="1/4">1/4</button>
+            <button data-fraction="1/2">1/2</button>
+            <button data-fraction="3/4">3/4</button>
+          </div>
         </div>
 
         <div class="measurementActions">
@@ -447,9 +461,8 @@
       </div>
 
       <p class="measurementHint">
-        Use <strong>X</strong> when a measurement is missing. Otherwise type the numerator first, then tap <strong>/4</strong>, <strong>/8</strong>,
-        or <strong>/16</strong>. A space appears as an underscore while typing:
-        <strong>26_3/8</strong> is saved as <strong>26 3/8</strong>.
+        Type the whole number, then tap a fraction. The app adds the space automatically:
+        <strong>26</strong> + <strong>3/8</strong> becomes <strong>26 3/8</strong>. Use <strong>X</strong> when a measurement is missing.
       </p>
     </div>
   </div>
@@ -544,7 +557,6 @@
   <script src="db.js"></script>
   <script src="save.js"></script>
   <script src="workspace.js"></script>
-  <script src="app.js"></script>
 
   <!-- Offline support: register the service worker -->
   <script>
