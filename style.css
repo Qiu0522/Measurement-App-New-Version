@@ -1886,10 +1886,10 @@ button {
 }
 
 
-/* ---------- V8 quick-fraction measurement keypad ---------- */
+/* ---------- V9 grouped quick-fraction measurement keypad ---------- */
 .fractionKeypadGrid {
   display: grid !important;
-  grid-template-columns: minmax(300px, 1fr) minmax(360px, 1.15fr) !important;
+  grid-template-columns: minmax(300px, 1fr) minmax(390px, 1.2fr) !important;
   grid-template-rows: auto !important;
   gap: 10px !important;
 }
@@ -1916,25 +1916,70 @@ button {
 
 .quickFractionPad {
   display: grid;
-  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
   grid-template-rows: repeat(5, minmax(58px, 1fr));
   gap: 8px;
 }
 
 .quickFractionPad button {
   min-height: 58px;
-  padding: 7px 5px;
-  border: 1px solid #9eb5d1;
+  padding: 7px 4px;
+  border: 1px solid;
   border-radius: 9px;
-  background: #edf5ff;
-  color: #172f51;
-  font-size: 23px;
+  font-size: 21px;
   font-weight: 750;
+}
+
+/* Keep every fraction key the same size; blank grid spaces separate groups. */
+.quickFractionPad .fractionDenom2 {
+  grid-column: 1;
+  grid-row: 1;
+  background: #edf8ef;
+  border-color: #86bd8d;
+  color: #226b2d;
+}
+
+.quickFractionPad .fractionDenom4:nth-of-type(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.quickFractionPad .fractionDenom4:nth-of-type(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+.quickFractionPad .fractionDenom4 {
+  background: #edf5ff;
+  border-color: #82addd;
+  color: #1c5f9f;
+}
+
+.quickFractionPad .fractionDenom8:nth-of-type(4) { grid-column: 1; grid-row: 3; }
+.quickFractionPad .fractionDenom8:nth-of-type(5) { grid-column: 2; grid-row: 3; }
+.quickFractionPad .fractionDenom8:nth-of-type(6) { grid-column: 3; grid-row: 3; }
+.quickFractionPad .fractionDenom8:nth-of-type(7) { grid-column: 4; grid-row: 3; }
+.quickFractionPad .fractionDenom8 {
+  background: #fff5e9;
+  border-color: #e8ad65;
+  color: #a95708;
+}
+
+.quickFractionPad .fractionDenom16:nth-of-type(8)  { grid-column: 1; grid-row: 4; }
+.quickFractionPad .fractionDenom16:nth-of-type(9)  { grid-column: 2; grid-row: 4; }
+.quickFractionPad .fractionDenom16:nth-of-type(10) { grid-column: 3; grid-row: 4; }
+.quickFractionPad .fractionDenom16:nth-of-type(11) { grid-column: 4; grid-row: 4; }
+.quickFractionPad .fractionDenom16:nth-of-type(12) { grid-column: 1; grid-row: 5; }
+.quickFractionPad .fractionDenom16:nth-of-type(13) { grid-column: 2; grid-row: 5; }
+.quickFractionPad .fractionDenom16:nth-of-type(14) { grid-column: 3; grid-row: 5; }
+.quickFractionPad .fractionDenom16:nth-of-type(15) { grid-column: 4; grid-row: 5; }
+.quickFractionPad .fractionDenom16 {
+  background: #f5effc;
+  border-color: #b69ad8;
+  color: #6b3aa0;
 }
 
 .quickFractionPad button:active {
   transform: translateY(1px);
-  background: #d9eaff;
+  filter: brightness(0.94);
 }
 
 @media (max-width: 900px) {
