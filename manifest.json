@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Field Measurement">
+  <meta name="theme-color" content="#f4f5f7">
+
+  <title>Field Measurement</title>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+
+  <script src="lib/pdf.min.js"></script>
+  <script src="lib/html2pdf.bundle.min.js"></script>
+</head>
+
+<body>
+  <div id="appBanner" class="appBanner hidden">
+    <span id="appBannerText"></span>
+    <button id="appBannerClose" type="button" aria-label="Dismiss">×</button>
+  </div>
+
+  <!-- ========================= HOME ========================= -->
+  <section id="homeView" class="view">
+    <header class="homeHeader">
+      <div>
+        <h1>Field Measurement</h1>
+        <p>Folders and work files are saved automatically on this device.</p>
+        <p id="backupStatus" class="backupStatus"></p>
+      </div>
+
+      <div class="libraryHeaderActions">
+        <button id="newFolderBtn" class="secondaryButton largeButton" type="button">
+          ＋ New Folder
+        </button>
+
+        <button id="newProjectBtn" class="primaryButton largeButton" type="button">
+          ＋ New File
+        </button>
+
+        <button id="backupBtn" class="secondaryButton largeButton" type="button">
+          ⬇ Backup
+        </button>
+
+        <button id="restoreBtn" class="secondaryButton largeButton" type="button">
+          ⬆ Restore
+        </button>
+
+        <button id="importFileBtn" class="secondaryButton largeButton" type="button">
+          ＋ Import File
+        </button>
+
+        <button id="selectFilesBtn" class="secondaryButton largeButton" type="button">
+          Select Files
+        </button>
+      </div>
+    </header>
+
+    <input id="importFileInput" type="file" accept=".json,application/json" class="hidden">
+
+    <div class="libraryNavigation">
+      <button id="upFolderBtn" class="toolbarButton" type="button" disabled>← Back</button>
+      <div id="folderBreadcrumb" class="folderBreadcrumb"></div>
+    </div>
+
+    <div class="homeTools">
+      <input id="projectSearch" type="search" placeholder="Search folders or work files">
+    </div>
+
+    <div id="selectionBar" class="selectionBar hidden">
+      <strong id="selectionCount">0 files selected</strong>
+      <button id="selectAllFilesBtn" type="button">Select All</button>
+      <button id="exportSelectedFilesBtn" type="button" disabled>Export Selected</button>
+      <button id="backupSelectedFilesBtn" type="button" disabled>Backup Selected</button>
+      <button id="cancelFileSelectionBtn" type="button">Cancel</button>
+    </div>
+
+    <div id="emptyLibrary" class="emptyState">
+      <div class="emptyIcon">📁</div>
+      <h2>This folder is empty</h2>
+      <p>Add a folder, import a PDF, or create a blank drawing.</p>
+    </div>
+
+    <div id="libraryGrid" class="libraryGrid"></div>
+  </section>
+
+  <!-- ======================= WORKSPACE ======================= -->
+  <section id="workspaceView" class="view hidden">
+    <div id="toolbar">
+      <div class="toolbarRow primaryTools">
+        <button id="backHomeBtn" class="toolbarButton" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M19 12H5m6-6-6 6 6 6"/></svg>Library</button>
+        <span id="workspaceProjectName" class="workspaceTitle">Untitled</span>
+        <div class="modeToggle">
+          <button id="measureModeBtn" class="modeBtn active" type="button">Measure</button>
+          <button id="reviewModeBtn" class="modeBtn" type="button">Review</button>
+        </div>
+        <span class="toolbarSpacer"></span>
+        <div class="zoomControl">
+          <button id="zoomOutBtn" class="toolbarButton iconButton" type="button" title="Zoom Out">−</button>
+          <button id="zoomDisplay" class="zoomDisplay" type="button" title="Reset to 100%">100%</button>
+          <button id="zoomInBtn" class="toolbarButton iconButton" type="button" title="Zoom In">＋</button>
+        </div>
+        <button id="fitBtn" class="toolbarButton iconButton" type="button" title="Fit to screen"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/></svg></button>
+        <button id="pageBtn" class="toolbarButton" type="button" title="Jump to PDF page">Page <span id="pageDisplay">1/1</span></button>
+        <button id="undoBtn" class="toolbarButton iconButton" type="button" title="Undo"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M5 12h8a6 6 0 0 1 6 6"/></svg></button>
+        <button id="redoBtn" class="toolbarButton iconButton" type="button" title="Redo"><svg class="uiIcon" viewBox="0 0 24 24"><path d="m15 7 5 5-5 5m4-5h-8a6 6 0 0 0-6 6"/></svg></button>
+        <button id="manualSaveBtn" class="toolbarButton saveButton" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5zM8 3v6h8V3M8 21v-8h8v8"/></svg>Save</button>
+        <details class="exportMenu">
+          <summary class="toolbarButton"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/></svg>Export</summary>
+          <div class="exportMenuPanel"><button id="exportCsvBtn" type="button">Export CSV</button><button id="exportPdfBtn" type="button">Export PDF</button></div>
+        </details>
+      </div>
+
+      <div class="toolbarRow drawingTools mode-measure">
+        <label class="compactLabel dataControl measureOnly">Data Type <span id="dataTypeSwatch" class="dataTypeSwatch"></span><select id="dataSelect"></select></label>
+        <button id="addBtn" class="toolbarButton measureOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Point</button>
+        <button id="lockBtn" class="toolbarButton measureOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Lock</button>
+        <button id="orderBtn" class="toolbarButton reviewOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M8 4v16m-3-3 3 3 3-3M16 20V4m-3 3 3-3 3 3"/></svg>Auto Sort</button>
+        <button id="batchAssignBtn" class="toolbarButton reviewOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><path d="m5 7 2 2 4-5m5 14h5M3 18h7"/></svg>Batch Side</button>
+        <button id="labelsBtn" class="toolbarButton reviewOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M4 6h10l6 6-8 8-8-8z"/><circle cx="9" cy="10" r="1"/></svg>Labels</button>
+        <button id="reviewBtn" class="toolbarButton reviewOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Preview CSV</button>
+        <div class="zoomControl labelSizeControl measureOnly" title="Measurement label size">
+          <button id="labelSizeDownBtn" class="toolbarButton iconButton" type="button" title="Smaller labels">A−</button>
+          <button id="labelSizeDisplay" class="zoomDisplay" type="button" title="Reset label size">30</button>
+          <button id="labelSizeUpBtn" class="toolbarButton iconButton" type="button" title="Larger labels">A＋</button>
+        </div>
+        <details id="markupMenu" class="markupMenu measureOnly">
+          <summary id="markupSummary" class="toolbarButton">✎ Markup ▾</summary>
+          <div class="markupMenuPanel">
+            <div class="markupToolRow">
+        <button id="textBtn" class="toolbarButton toolButton" type="button" title="Text Box">T Text</button>
+        <button id="penBtn" class="toolbarButton toolButton" type="button" title="Pen">✏️ Pen</button>
+        <button id="highlighterBtn" class="toolbarButton toolButton" type="button" title="Highlighter">🖍 Highlight</button>
+        <button id="eraserBtn" class="toolbarButton toolButton" type="button" title="Eraser">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor"
+             stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4L20 11L11 20"/>
+          <path d="M6 11L13 18"/>
+        </svg>
+          <span>Eraser</span>
+        </button>
+            </div>
+
+            <span class="markupSectionLabel">Color</span>
+
+        <div class="brushPalette" aria-label="Brush colors">
+          <button class="colorSwatch selected" data-brush-color="#ff0000" style="--swatch:#ff0000" title="Red"></button>
+          <button class="colorSwatch" data-brush-color="#0066ff" style="--swatch:#0066ff" title="Blue"></button>
+          <button class="colorSwatch" data-brush-color="#111111" style="--swatch:#111111" title="Black"></button>
+          <button class="colorSwatch" data-brush-color="#00a040" style="--swatch:#00a040" title="Green"></button>
+          <button class="colorSwatch" data-brush-color="#ffd400" style="--swatch:#ffd400" title="Yellow"></button>
+        </div>
+
+            <span class="markupSectionLabel">Size</span>
+        <div class="sizePalette" aria-label="Brush sizes">
+          <button class="sizeChoice" data-brush-size="3" title="Thin"><span class="sizeLine thin"></span></button>
+          <button class="sizeChoice selected" data-brush-size="5" title="Medium"><span class="sizeLine medium"></span></button>
+          <button class="sizeChoice" data-brush-size="8" title="Thick"><span class="sizeLine thick"></span></button>
+        </div>
+          </div>
+        </details>
+
+      </div>
+    </div>
+
+    <div id="reorderBar" class="reorderBar hidden">
+      <span id="reorderBarText"></span>
+      <button id="reorderCancelBtn" type="button">Cancel</button>
+    </div>
+
+    <div id="batchAssignBar" class="batchAssignBar hidden">
+      <strong id="batchAssignText">Batch Side: 0 selected</strong>
+      <button type="button" data-batch-side="N">N</button>
+      <button type="button" data-batch-side="E">E</button>
+      <button type="button" data-batch-side="S">S</button>
+      <button type="button" data-batch-side="W">W</button>
+      <button id="batchAutoBtn" type="button">Reset Auto</button>
+      <button id="batchCancelBtn" type="button">Cancel</button>
+    </div>
+
+    <div id="drawingWrapper">
+      <div id="drawingArea">
+        <img id="drawingImage" alt="Drawing" class="hidden">
+        <canvas id="pdfCanvas" class="hidden"></canvas>
+        <canvas id="commentCanvas"></canvas>
+      </div>
+    </div>
+    <div id="noSideBanner" class="noSideBanner hidden">
+      <span id="noSideBannerText"></span>
+    </div>
+
+    <aside id="reviewSidebar" class="reviewSidebar hidden">
+      <div class="reviewHeader">
+        <span>Preview CSV</span>
+        <button id="closeReviewBtn" type="button" aria-label="Close">×</button>
+      </div>
+      <div id="reviewList" class="reviewList"></div>
+    </aside>
+
+    <div id="workspaceStatusBar">
+      <span id="status" class="statusText">Ready.</span>
+      <span id="saveIndicator" class="saveIndicator">✓ Saved</span>
+    </div>
+  </section>
+
+  <!-- ======================== MENUS ========================= -->
+  <div id="newProjectMenu" class="popupMenu hidden">
+    <button id="importPdfChoice" type="button">📄 Import PDF</button>
+    <button id="blankChoice" type="button">⬜ Blank Drawing</button>
+  </div>
+
+  <div id="libraryContextMenu" class="popupMenu hidden">
+    <button id="renameLibraryAction" type="button">Rename</button>
+    <button id="duplicateLibraryAction" type="button">Duplicate</button>
+    <button id="exportFileAction" type="button">Export File</button>
+    <button id="deleteLibraryAction" class="dangerText" type="button">Delete</button>
+  </div>
+
+  <div id="renameModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2 id="renameModalTitle">Rename</h2>
+      <label>Name<input id="renameInput" type="text" maxlength="80"></label>
+      <div class="modalActions">
+        <button id="cancelRenameBtn" type="button">Cancel</button>
+        <button id="confirmRenameBtn" class="primaryButton" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pointContextMenu" class="popupMenu hidden">
+    <button id="pointSetPositionAction" type="button">Set Position…</button>
+    <button id="pointMoveAction" type="button">Move</button>
+    <button id="pointExcludeAction" type="button">Exclude from export</button>
+    <button id="pointDeleteAction" class="dangerText" type="button">Delete</button>
+  </div>
+
+
+  <aside id="pageModal" class="pageSidebar hidden" aria-label="PDF pages">
+    <div class="pageSidebarHeader">
+      <div>
+        <h2>Pages</h2>
+        <p id="pageModalSummary" class="mutedText"></p>
+      </div>
+      <button id="closePageModalBtn" class="pageSidebarClose" type="button" aria-label="Close pages">×</button>
+    </div>
+    <div id="pageList" class="pageList"></div>
+  </aside>
+
+  <div id="autoSortModal" class="modalBackdrop hidden">
+    <div class="modalCard autoSortCard">
+      <h2>Auto Sort</h2>
+
+      <label>
+        Data Type
+        <select id="autoSortDataType"></select>
+      </label>
+
+      <label>
+        Side
+        <select id="autoSortSide">
+          <option value="__all__">All Sides</option>
+          <option value="N">North</option>
+          <option value="E">East</option>
+          <option value="S">South</option>
+          <option value="W">West</option>
+        </select>
+      </label>
+
+      <fieldset class="autoSortDirection">
+        <legend>Direction</legend>
+        <label class="radioChoice">
+          <input type="radio" name="autoSortDirection" value="clockwise" checked>
+          <span>↻ Clockwise</span>
+        </label>
+        <label class="radioChoice">
+          <input type="radio" name="autoSortDirection" value="counterclockwise">
+          <span>↺ Counterclockwise</span>
+        </label>
+      </fieldset>
+
+      <div class="modalActions">
+        <button id="cancelAutoSortBtn" type="button">Cancel</button>
+        <button id="confirmAutoSortBtn" class="primaryButton" type="button">Sort</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setPositionModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2>Set Position</h2>
+      <p id="setPositionInfo" class="setPositionInfo"></p>
+      <label>Move to position
+        <input id="setPositionInput" type="number" min="1" step="1" inputmode="numeric">
+      </label>
+      <div class="modalActions">
+        <button id="cancelSetPositionBtn" type="button">Cancel</button>
+        <button id="confirmSetPositionBtn" class="primaryButton" type="button">Move</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="noSideModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2>Unassigned measurements</h2>
+      <p id="noSideModalText"></p>
+      <div class="modalActions">
+        <button id="assignSideBtn" class="primaryButton" type="button">Assign Side</button>
+        <button id="exportAnywayBtn" type="button">Export Anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden input for choosing a backup file to restore -->
+  <input id="restoreFileInput" type="file" accept=".json,application/json" class="hidden">
+
+  <!-- ======================== MODALS ======================== -->
+  <div id="restoreModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2>Restore Backup</h2>
+
+      <p id="restoreSummary" class="restoreSummary"></p>
+
+      <p class="restoreWarning">
+        <strong>Merge</strong> keeps everything already on this device and adds
+        or updates items from the backup.
+        <strong>Replace All</strong> deletes everything on this device first,
+        then loads only the backup.
+      </p>
+
+      <div class="modalActions">
+        <button id="restoreMergeBtn" class="primaryButton" type="button">Merge</button>
+        <button id="restoreReplaceBtn" class="dangerButton" type="button">Replace All</button>
+      </div>
+
+      <button id="cancelRestoreBtn" class="fullWidthButton" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <div id="folderModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2>New Folder</h2>
+
+      <label>
+        Folder name
+        <input id="folderNameInput" type="text" placeholder="Tower 3">
+      </label>
+
+      <div class="modalActions">
+        <button id="cancelFolderModal" type="button">Cancel</button>
+        <button id="confirmFolderModal" class="primaryButton" type="button">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="projectModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2 id="projectModalTitle">New Work File</h2>
+
+      <label>
+        Work file name
+        <input id="projectNameInput" type="text" placeholder="Level 11">
+      </label>
+
+      <div id="blankSizeFields" class="hidden">
+        <div class="fieldRow">
+          <label>
+            Width
+            <input id="blankWidthInput" type="number" min="500" value="2400">
+          </label>
+          <label>
+            Height
+            <input id="blankHeightInput" type="number" min="500" value="1600">
+          </label>
+        </div>
+      </div>
+
+      <input id="pdfFileInput" type="file" accept=".pdf,application/pdf" class="hidden">
+
+      <div class="modalActions">
+        <button id="cancelProjectModal" type="button">Cancel</button>
+        <button id="confirmProjectModal" class="primaryButton" type="button">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="measurementModal" class="modalBackdrop hidden">
+    <div class="modalCard measurementCard">
+      <h2 id="measurementTitle">Enter Measurement</h2>
+
+      <input
+        id="measurementDisplay"
+        type="text"
+        readonly
+        tabindex="-1"
+        inputmode="none"
+        placeholder="Example: -26_3/8"
+        aria-label="Measurement"
+      >
+
+      <p id="measurementError" class="measurementError hidden"></p>
+
+      <div class="measurementKeypad v6Keypad">
+        <div class="currentSidePanel">
+          <div class="currentSideLabel">Current Side <span class="currentSideReminder">Check before entering</span></div>
+          <div class="sideRow">
+            <button class="sideBtn" data-side="N" type="button">N</button>
+            <button class="sideBtn" data-side="E" type="button">E</button>
+            <button class="sideBtn" data-side="S" type="button">S</button>
+            <button class="sideBtn" data-side="W" type="button">W</button>
+            <button class="sideBtn pendingSideBtn activeSide" data-side="" type="button" title="Pending side">?</button>
+          </div>
+        </div>
+
+        <div class="v6MainGrid">
+          <button data-key="7">7</button>
+          <button data-key="8">8</button>
+          <button data-key="9">9</button>
+          <button data-action="backspace" class="operatorButton deleteButton tallDelete" title="Backspace">⌫</button>
+          <button data-denominator="2" class="fractionButton">/2</button>
+
+          <button data-key="4">4</button>
+          <button data-key="5">5</button>
+          <button data-key="6">6</button>
+          <button data-denominator="4" class="fractionButton">/4</button>
+
+          <button data-key="1">1</button>
+          <button data-key="2">2</button>
+          <button data-key="3">3</button>
+          <button data-action="clear" class="clearButton" title="Clear all">Clear</button>
+          <button data-denominator="8" class="fractionButton">/8</button>
+
+          <button data-key="/" class="operatorButton">/</button>
+          <button data-key="0">0</button>
+          <button data-action="negative" class="operatorButton">−</button>
+          <button data-key="X" id="missingValueBtn" class="missingValueButton" type="button">X</button>
+          <button data-denominator="16" class="fractionButton">/16</button>
+
+          <button data-key=" " class="spaceButton gridSpaceButton">SPACE</button>
+        </div>
+
+        <div class="measurementActions">
+          <button id="cancelMeasurementBtn" type="button">Cancel</button>
+          <button data-action="confirm" class="confirmMeasurementButton" type="button">✓ OK</button>
+        </div>
+      </div>
+
+      <p class="measurementHint">
+        Use <strong>X</strong> when a measurement is missing. Otherwise type the numerator first, then tap <strong>/4</strong>, <strong>/8</strong>,
+        or <strong>/16</strong>. A space appears as an underscore while typing:
+        <strong>26_3/8</strong> is saved as <strong>26 3/8</strong>.
+      </p>
+    </div>
+  </div>
+
+  <div id="textModal" class="modalBackdrop hidden">
+    <div class="modalCard textCard">
+      <h2>Add Text</h2>
+      <label>Text<input id="textInput" type="text" maxlength="160" placeholder="Type a note"></label>
+      <span class="markupSectionLabel">Color</span>
+      <div class="textColorRow">
+        <button class="colorSwatch selected" data-text-color="#ff0000" style="--swatch:#ff0000" title="Red" type="button"></button>
+        <button class="colorSwatch" data-text-color="#0066ff" style="--swatch:#0066ff" title="Blue" type="button"></button>
+        <button class="colorSwatch" data-text-color="#111111" style="--swatch:#111111" title="Black" type="button"></button>
+        <button class="colorSwatch" data-text-color="#00a040" style="--swatch:#00a040" title="Green" type="button"></button>
+        <button class="colorSwatch" data-text-color="#ffd400" style="--swatch:#ffd400" title="Yellow" type="button"></button>
+      </div>
+      <div class="modalActions">
+        <button id="cancelTextBtn" type="button">Cancel</button>
+        <button id="confirmTextBtn" class="primaryButton" type="button">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dataTypeModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2>Add Data Type</h2>
+
+      <label>
+        Name
+        <input id="dataTypeNameInput" type="text" value="New Data">
+      </label>
+
+      <label>
+        Color
+        <input id="dataTypeColorInput" type="color" value="#000000">
+      </label>
+
+      <div class="modalActions">
+        <button id="cancelDataTypeBtn" type="button">Cancel</button>
+        <button id="confirmDataTypeBtn" class="primaryButton" type="button">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sideModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2>Assign Side</h2>
+      <p>Only this point changes side. Other points remain fixed.</p>
+
+      <div class="sideButtons">
+        <button data-side="N">N</button>
+        <button data-side="E">E</button>
+        <button data-side="S">S</button>
+        <button data-side="W">W</button>
+      </div>
+
+      <button id="cancelSideBtn" class="fullWidthButton" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <div id="directionModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2>Order Direction</h2>
+      <p>Choose which way to walk around the points when numbering them.</p>
+
+      <div class="directionButtons">
+        <button data-direction="clockwise" type="button">↻ Clockwise</button>
+        <button data-direction="counterclockwise" type="button">↺ Counterclockwise</button>
+      </div>
+
+      <button id="cancelDirectionBtn" class="fullWidthButton" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <div id="fileNameModal" class="modalBackdrop hidden">
+    <div class="modalCard">
+      <h2 id="fileNameModalTitle">Export</h2>
+
+      <label>
+        File name
+        <input id="fileNameInput" type="text" placeholder="measurements">
+      </label>
+
+      <div class="modalActions">
+        <button id="cancelFileNameBtn" type="button">Cancel</button>
+        <button id="confirmFileNameBtn" class="primaryButton" type="button">Export</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script order matters -->
+  <script src="db.js"></script>
+  <script src="save.js"></script>
+  <script src="workspace.js"></script>
+  <script src="app.js"></script>
+
+  <!-- Offline support: register the service worker -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch(error => {
+          console.warn("Service worker registration failed:", error);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
