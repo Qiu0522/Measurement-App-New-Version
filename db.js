@@ -1,1098 +1,630 @@
 "use strict";
 
-const App = (() => {
-  let projects = [];
-  let folders = [];
+const ProjectDB = (() => {
+  const DB_NAME = "FieldMeasurementV4";
+  const DB_VERSION = 2;
 
-  let currentFolderId = null;
-  let currentMenuItem = null;
-  let pendingRename = null;
+  const PROJECTS = "projects";
+  const FOLDERS = "folders";
+  const ASSETS = "assets";
 
-  let pendingProjectKind = null;
-  let pendingPdfData = null;
+  let dbPromise = null;
+  let writeQueue = Promise.resolve();
 
-  let pendingBackup = null;
-  let replaceArmed = false;
-  let fileSelectionMode = false;
-  const selectedProjectIds = new Set();
+  function open() {
+    if (dbPromise) return dbPromise;
 
-  const els = {};
+    dbPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-  function init() {
-    els.homeView = document.getElementById("homeView");
-    els.workspaceView = document.getElementById("workspaceView");
+      request.onupgradeneeded = event => {
+        const db = event.target.result;
+        const transaction = event.target.transaction;
 
-    els.newFolderBtn = document.getElementById("newFolderBtn");
-    els.newProjectBtn = document.getElementById("newProjectBtn");
-    els.newProjectMenu = document.getElementById("newProjectMenu");
-    els.importPdfChoice = document.getElementById("importPdfChoice");
-    els.blankChoice = document.getElementById("blankChoice");
+        let projectStore;
 
-    els.backupBtn = document.getElementById("backupBtn");
-    els.restoreBtn = document.getElementById("restoreBtn");
-    els.restoreFileInput = document.getElementById("restoreFileInput");
-    els.restoreModal = document.getElementById("restoreModal");
-    els.restoreSummary = document.getElementById("restoreSummary");
-    els.restoreMergeBtn = document.getElementById("restoreMergeBtn");
-    els.restoreReplaceBtn = document.getElementById("restoreReplaceBtn");
-    els.cancelRestoreBtn = document.getElementById("cancelRestoreBtn");
+        if (!db.objectStoreNames.contains(PROJECTS)) {
+          projectStore = db.createObjectStore(PROJECTS, { keyPath: "id" });
+          projectStore.createIndex("updatedAt", "updatedAt");
+          projectStore.createIndex("name", "name");
+          projectStore.createIndex("folderId", "folderId");
+        } else {
+          projectStore = transaction.objectStore(PROJECTS);
 
-    els.appBanner = document.getElementById("appBanner");
-    els.appBannerText = document.getElementById("appBannerText");
-    els.appBannerClose = document.getElementById("appBannerClose");
+          if (!projectStore.indexNames.contains("folderId")) {
+            projectStore.createIndex("folderId", "folderId");
+          }
+        }
 
-    els.upFolderBtn = document.getElementById("upFolderBtn");
-    els.folderBreadcrumb = document.getElementById("folderBreadcrumb");
-    els.projectSearch = document.getElementById("projectSearch");
-    els.libraryGrid = document.getElementById("libraryGrid");
-    els.emptyLibrary = document.getElementById("emptyLibrary");
+        if (!db.objectStoreNames.contains(FOLDERS)) {
+          const folderStore = db.createObjectStore(FOLDERS, { keyPath: "id" });
+          folderStore.createIndex("parentId", "parentId");
+          folderStore.createIndex("updatedAt", "updatedAt");
+          folderStore.createIndex("name", "name");
+        }
 
-    els.libraryContextMenu = document.getElementById("libraryContextMenu");
-    els.renameLibraryAction = document.getElementById("renameLibraryAction");
-    els.duplicateLibraryAction = document.getElementById("duplicateLibraryAction");
-    els.deleteLibraryAction = document.getElementById("deleteLibraryAction");
-    els.exportFileAction = document.getElementById("exportFileAction");
-    els.importFileBtn = document.getElementById("importFileBtn");
-    els.importFileInput = document.getElementById("importFileInput");
-    els.backupStatus = document.getElementById("backupStatus");
-    els.selectFilesBtn = document.getElementById("selectFilesBtn");
-    els.selectionBar = document.getElementById("selectionBar");
-    els.selectionCount = document.getElementById("selectionCount");
-    els.selectAllFilesBtn = document.getElementById("selectAllFilesBtn");
-    els.exportSelectedFilesBtn = document.getElementById("exportSelectedFilesBtn");
-    els.backupSelectedFilesBtn = document.getElementById("backupSelectedFilesBtn");
-    els.cancelFileSelectionBtn = document.getElementById("cancelFileSelectionBtn");
-    els.renameModal = document.getElementById("renameModal");
-    els.renameModalTitle = document.getElementById("renameModalTitle");
-    els.renameInput = document.getElementById("renameInput");
-    els.cancelRenameBtn = document.getElementById("cancelRenameBtn");
-    els.confirmRenameBtn = document.getElementById("confirmRenameBtn");
+        if (!db.objectStoreNames.contains(ASSETS)) {
+          db.createObjectStore(ASSETS, { keyPath: "projectId" });
+        }
+      };
 
-    els.folderModal = document.getElementById("folderModal");
-    els.folderNameInput = document.getElementById("folderNameInput");
-    els.cancelFolderModal = document.getElementById("cancelFolderModal");
-    els.confirmFolderModal = document.getElementById("confirmFolderModal");
+      request.onsuccess = () => {
+        const db = request.result;
 
-    els.projectModal = document.getElementById("projectModal");
-    els.projectModalTitle = document.getElementById("projectModalTitle");
-    els.projectNameInput = document.getElementById("projectNameInput");
-    els.blankSizeFields = document.getElementById("blankSizeFields");
-    els.blankWidthInput = document.getElementById("blankWidthInput");
-    els.blankHeightInput = document.getElementById("blankHeightInput");
-    els.pdfFileInput = document.getElementById("pdfFileInput");
-    els.cancelProjectModal = document.getElementById("cancelProjectModal");
-    els.confirmProjectModal = document.getElementById("confirmProjectModal");
+        db.onversionchange = () => {
+          db.close();
+          dbPromise = null;
 
-    bindEvents();
-  }
+          // Let the UI warn the user that another tab took over the database.
+          try {
+            window.dispatchEvent(new CustomEvent("fielddb:conflict"));
+          } catch (error) {
+            /* CustomEvent unavailable: ignore */
+          }
+        };
 
-  function bindEvents() {
-    els.newFolderBtn.addEventListener("click", openFolderModal);
+        resolve(db);
+      };
 
-    els.newProjectBtn.addEventListener("click", event => {
-      event.stopPropagation();
-      positionMenu(els.newProjectMenu, event.clientX, event.clientY, 200, 100);
+      request.onerror = () => {
+        dbPromise = null;
+        reject(request.error);
+      };
+
+      request.onblocked = () => {
+        console.warn("IndexedDB upgrade is blocked by another open tab.");
+      };
     });
 
-    els.importPdfChoice.addEventListener("click", () => {
-      hideMenus();
-      pendingProjectKind = "pdf";
-      pendingPdfData = null;
-      els.pdfFileInput.value = "";
-      els.pdfFileInput.click();
-    });
-
-    els.blankChoice.addEventListener("click", () => {
-      hideMenus();
-      pendingProjectKind = "blank";
-      pendingPdfData = null;
-      openProjectModal();
-    });
-
-    els.pdfFileInput.addEventListener("change", async event => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-
-      pendingPdfData = await file.arrayBuffer();
-      pendingProjectKind = "pdf";
-      openProjectModal(file.name.replace(/\.pdf$/i, ""));
-    });
-
-    els.backupBtn.addEventListener("click", downloadBackup);
-
-    els.restoreBtn.addEventListener("click", () => {
-      els.restoreFileInput.value = "";
-      els.restoreFileInput.click();
-    });
-
-    els.restoreFileInput.addEventListener("change", handleRestoreFile);
-    els.cancelRestoreBtn.addEventListener("click", closeRestoreModal);
-    els.restoreMergeBtn.addEventListener("click", () => runRestore("merge"));
-    els.restoreReplaceBtn.addEventListener("click", handleReplaceClick);
-
-    els.appBannerClose.addEventListener("click", hideBanner);
-
-    // Another tab took over the local database (e.g. a reload with new files).
-    window.addEventListener("fielddb:conflict", () => {
-      showBanner(
-        "This app was reloaded in another tab or window. Close the other " +
-        "copies and reload this page to avoid save problems."
-      );
-    });
-
-    setupTabDetection();
-
-    els.upFolderBtn.addEventListener("click", goUpFolder);
-    els.projectSearch.addEventListener("input", renderLibrary);
-
-    els.cancelFolderModal.addEventListener("click", closeFolderModal);
-    els.confirmFolderModal.addEventListener("click", createFolder);
-
-    els.cancelProjectModal.addEventListener("click", closeProjectModal);
-    els.confirmProjectModal.addEventListener("click", createProjectFromModal);
-
-    els.renameLibraryAction.addEventListener("click", renameSelectedItem);
-    els.duplicateLibraryAction.addEventListener("click", duplicateSelectedItem);
-    els.deleteLibraryAction.addEventListener("click", deleteSelectedItem);
-
-    els.exportFileAction.addEventListener("click", exportSelectedFile);
-
-    els.importFileBtn.addEventListener("click", () => {
-      els.importFileInput.value = "";
-      els.importFileInput.click();
-    });
-    els.importFileInput.addEventListener("change", handleImportFile);
-    els.selectFilesBtn.addEventListener("click", startFileSelection);
-    els.cancelFileSelectionBtn.addEventListener("click", stopFileSelection);
-    els.selectAllFilesBtn.addEventListener("click", selectAllVisibleFiles);
-    els.exportSelectedFilesBtn.addEventListener("click", exportSelectedFiles);
-    els.backupSelectedFilesBtn.addEventListener("click", backupSelectedFiles);
-
-    els.cancelRenameBtn.addEventListener("click", () => {
-      pendingRename = null;
-      els.renameModal.classList.add("hidden");
-    });
-    els.confirmRenameBtn.addEventListener("click", confirmRename);
-    els.renameInput.addEventListener("keydown", event => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        confirmRename();
-      }
-    });
-
-    document.addEventListener("click", event => {
-      if (!els.newProjectMenu.contains(event.target)) {
-        els.newProjectMenu.classList.add("hidden");
-      }
-
-      if (!els.libraryContextMenu.contains(event.target)) {
-        els.libraryContextMenu.classList.add("hidden");
-      }
-    });
+    return dbPromise;
   }
 
-  async function start() {
-    await ProjectDB.open();
-    await refreshLibrary();
-    showLibrary();
-    warnIfStorageLow();
-  }
-
-  async function refreshLibrary() {
-    [projects, folders] = await Promise.all([
-      ProjectDB.getAllProjects(),
-      ProjectDB.getAllFolders()
-    ]);
-
-    updateBackupStatus();
-    renderLibrary();
-  }
-
-  function renderLibrary() {
-    const search = els.projectSearch.value.trim().toLowerCase();
-
-    const childFolders = folders
-      .filter(folder => (folder.parentId || null) === currentFolderId)
-      .filter(folder => !search || folder.name.toLowerCase().includes(search));
-
-    const childProjects = projects
-      .filter(project => (project.folderId || null) === currentFolderId)
-      .filter(project => !search || project.name.toLowerCase().includes(search));
-
-    els.libraryGrid.innerHTML = "";
-
-    childFolders.forEach(folder => {
-      els.libraryGrid.appendChild(createFolderCard(folder));
-    });
-
-    childProjects.forEach(project => {
-      els.libraryGrid.appendChild(createProjectCard(project));
-    });
-
-    els.emptyLibrary.classList.toggle(
-      "hidden",
-      childFolders.length + childProjects.length > 0
-    );
-
-    renderBreadcrumb();
-  }
-
-  function createFolderCard(folder) {
-    const card = document.createElement("article");
-    card.className = "libraryCard folderCard";
-
-    const openArea = document.createElement("div");
-    openArea.className = "cardOpenArea";
-
-    const preview = document.createElement("div");
-    preview.className = "projectPreview folderPreview";
-    preview.textContent = "📁";
-
-    const title = document.createElement("h3");
-    title.className = "projectName";
-    title.textContent = folder.name;
-
-    const counts = getFolderCounts(folder.id);
-
-    const meta = document.createElement("p");
-    meta.className = "projectMeta";
-    meta.textContent =
-      `${counts.folders} folders · ${counts.projects} files`;
-
-    openArea.append(preview, title, meta);
-
-    openArea.addEventListener("click", () => {
-      currentFolderId = folder.id;
-      els.projectSearch.value = "";
-      renderLibrary();
-    });
-
-    const menuButton = makeMenuButton({
-      type: "folder",
-      id: folder.id
-    });
-
-    card.append(openArea, menuButton);
-    return card;
-  }
-
-  function createProjectCard(project) {
-    const card = document.createElement("article");
-    card.className = "libraryCard projectCard";
-
-    const openArea = document.createElement("div");
-    openArea.className = "cardOpenArea";
-
-    const preview = document.createElement("div");
-    preview.className = "projectPreview";
-    preview.textContent = project.kind === "pdf" ? "📄" : "⬜";
-
-    const title = document.createElement("h3");
-    title.className = "projectName";
-    title.textContent = project.name;
-
-    const meta = document.createElement("p");
-    meta.className = "projectMeta";
-    meta.textContent = project.kind === "pdf" ? "PDF" : "Blank drawing";
-
-    const pointCount = project.state?.points?.length || 0;
-
-    const updated = document.createElement("p");
-    updated.className = "projectUpdated";
-    updated.textContent =
-      `${pointCount} points · Updated ${formatDate(project.updatedAt)}`;
-
-    openArea.append(preview, title, meta, updated);
-    openArea.addEventListener("click", () => {
-      if (fileSelectionMode) toggleProjectSelection(project.id);
-      else openProject(project.id);
-    });
-
-    const selector = document.createElement("button");
-    selector.type = "button";
-    selector.className = "fileSelector";
-    selector.setAttribute("aria-label", `Select ${project.name}`);
-    selector.textContent = selectedProjectIds.has(project.id) ? "✓" : "";
-    selector.classList.toggle("selected", selectedProjectIds.has(project.id));
-    selector.addEventListener("click", event => {
-      event.stopPropagation();
-      toggleProjectSelection(project.id);
-    });
-
-    const menuButton = makeMenuButton({
-      type: "project",
-      id: project.id
-    });
-
-    card.classList.toggle("selectionMode", fileSelectionMode);
-    card.classList.toggle("selectedFile", selectedProjectIds.has(project.id));
-    card.append(openArea, selector, menuButton);
-    return card;
-  }
-
-  function startFileSelection() {
-    fileSelectionMode = true;
-    selectedProjectIds.clear();
-    els.selectionBar.classList.remove("hidden");
-    els.selectFilesBtn.classList.add("hidden");
-    updateFileSelectionUI();
-    renderLibrary();
-  }
-
-  function stopFileSelection() {
-    fileSelectionMode = false;
-    selectedProjectIds.clear();
-    els.selectionBar.classList.add("hidden");
-    els.selectFilesBtn.classList.remove("hidden");
-    renderLibrary();
-  }
-
-  function toggleProjectSelection(id) {
-    if (!fileSelectionMode) fileSelectionMode = true;
-    if (selectedProjectIds.has(id)) selectedProjectIds.delete(id);
-    else selectedProjectIds.add(id);
-    updateFileSelectionUI();
-    renderLibrary();
-  }
-
-  function visibleProjectIds() {
-    const search = els.projectSearch.value.trim().toLowerCase();
-    return projects
-      .filter(project => (project.folderId || null) === currentFolderId)
-      .filter(project => !search || project.name.toLowerCase().includes(search))
-      .map(project => project.id);
-  }
-
-  function selectAllVisibleFiles() {
-    const visible = visibleProjectIds();
-    const allSelected = visible.length > 0 && visible.every(id => selectedProjectIds.has(id));
-    visible.forEach(id => allSelected ? selectedProjectIds.delete(id) : selectedProjectIds.add(id));
-    updateFileSelectionUI();
-    renderLibrary();
-  }
-
-  function updateFileSelectionUI() {
-    const count = selectedProjectIds.size;
-    els.selectionCount.textContent = `${count} file${count === 1 ? "" : "s"} selected`;
-    els.exportSelectedFilesBtn.disabled = count === 0;
-    els.backupSelectedFilesBtn.disabled = count === 0;
-    const visible = visibleProjectIds();
-    els.selectAllFilesBtn.textContent = visible.length && visible.every(id => selectedProjectIds.has(id))
-      ? "Clear All" : "Select All";
-  }
-
-  async function exportSelectedFiles() {
-    if (!selectedProjectIds.size) return;
-    try {
-      const bundle = await ProjectDB.exportProjectBundle([...selectedProjectIds]);
-      const stamp = new Date().toISOString().slice(0, 10);
-      downloadBlob(new Blob([JSON.stringify(bundle)], { type: "application/json" }),
-        `field-measurement-files-${stamp}.fmfiles.json`);
-    } catch (error) {
-      alert("Export failed: " + explainDbError(error));
-    }
-  }
-
-  async function backupSelectedFiles() {
-    if (!selectedProjectIds.size) return;
-    try {
-      const backup = await ProjectDB.exportSelected([...selectedProjectIds]);
-      const stamp = new Date().toISOString().slice(0, 10);
-      downloadBlob(new Blob([JSON.stringify(backup)], { type: "application/json" }),
-        `field-measurement-selected-backup-${stamp}.json`);
-      alert(`Backup saved with ${backup.counts.projects} selected file${backup.counts.projects === 1 ? "" : "s"}.`);
-    } catch (error) {
-      alert("Backup failed: " + explainDbError(error));
-    }
-  }
-
-  function makeMenuButton(item) {
-    const button = document.createElement("button");
-    button.className = "cardMenuButton";
-    button.type = "button";
-    button.textContent = "⋯";
-    button.title = "Options";
-
-    button.addEventListener("click", event => {
-      event.stopPropagation();
-      currentMenuItem = item;
-
-      els.duplicateLibraryAction.classList.toggle(
-        "hidden",
-        item.type === "folder"
-      );
-
-      els.exportFileAction.classList.toggle(
-        "hidden",
-        item.type === "folder"
-      );
-
-      positionMenu(
-        els.libraryContextMenu,
-        event.clientX,
-        event.clientY,
-        200,
-        item.type === "folder" ? 100 : 145
-      );
-    });
-
-    return button;
-  }
-
-  function getFolderCounts(folderId) {
-    return {
-      folders: folders.filter(folder => folder.parentId === folderId).length,
-      projects: projects.filter(project => project.folderId === folderId).length
-    };
-  }
-
-  function renderBreadcrumb() {
-    const path = [];
-    let id = currentFolderId;
-
-    while (id) {
-      const folder = folders.find(item => item.id === id);
-      if (!folder) break;
-      path.unshift(folder);
-      id = folder.parentId || null;
-    }
-
-    els.folderBreadcrumb.innerHTML = "";
-
-    const rootButton = document.createElement("button");
-    rootButton.type = "button";
-    rootButton.textContent = "Library";
-    rootButton.addEventListener("click", () => {
-      currentFolderId = null;
-      renderLibrary();
-    });
-
-    els.folderBreadcrumb.appendChild(rootButton);
-
-    path.forEach(folder => {
-      const separator = document.createElement("span");
-      separator.textContent = "›";
-
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = folder.name;
-      button.addEventListener("click", () => {
-        currentFolderId = folder.id;
-        renderLibrary();
-      });
-
-      els.folderBreadcrumb.append(separator, button);
-    });
-
-    els.upFolderBtn.disabled = !currentFolderId;
-  }
-
-  function goUpFolder() {
-    if (!currentFolderId) return;
-
-    const folder = folders.find(item => item.id === currentFolderId);
-    currentFolderId = folder?.parentId || null;
-    renderLibrary();
-  }
-
-  function openFolderModal() {
-    els.folderNameInput.value = "";
-    els.folderModal.classList.remove("hidden");
-    setTimeout(() => els.folderNameInput.focus(), 50);
-  }
-
-  function closeFolderModal() {
-    els.folderModal.classList.add("hidden");
-  }
-
-  function findSiblingByName(type, name, folderScope, excludeId) {
-    const lower = name.trim().toLowerCase();
-    if (type === "folder") {
-      return folders.find(f =>
-        (f.parentId || null) === folderScope &&
-        f.id !== excludeId &&
-        (f.name || "").trim().toLowerCase() === lower
-      );
-    }
-    return projects.find(p =>
-      (p.folderId || null) === folderScope &&
-      p.id !== excludeId &&
-      (p.name || "").trim().toLowerCase() === lower
-    );
-  }
-
-  async function createFolder() {
-    const name = els.folderNameInput.value.trim();
-
-    if (!name) {
-      alert("Enter a folder name.");
-      return;
-    }
-
-    if (findSiblingByName("folder", name, currentFolderId, null)) {
-      alert(`A folder named "${name}" already exists here. Please choose a different name.`);
-      return;
-    }
-
-    await ProjectDB.saveFolder({
-      id: ProjectDB.makeId("folder"),
-      name,
-      parentId: currentFolderId,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    });
-
-    closeFolderModal();
-    await refreshLibrary();
-  }
-
-  function openProjectModal(suggestedName = "") {
-    els.projectModalTitle.textContent =
-      pendingProjectKind === "pdf"
-        ? "Import PDF"
-        : "Create Blank Drawing";
-
-    els.projectNameInput.value = suggestedName;
-
-    els.blankSizeFields.classList.toggle(
-      "hidden",
-      pendingProjectKind !== "blank"
-    );
-
-    els.projectModal.classList.remove("hidden");
-    setTimeout(() => els.projectNameInput.focus(), 50);
-  }
-
-  function closeProjectModal() {
-    els.projectModal.classList.add("hidden");
-    pendingProjectKind = null;
-    pendingPdfData = null;
-  }
-
-  async function createProjectFromModal() {
-    const name = els.projectNameInput.value.trim();
-
-    if (!name) {
-      alert("Enter a work file name.");
-      return;
-    }
-
-    if (pendingProjectKind === "pdf" && !pendingPdfData) {
-      alert("Choose a PDF file.");
-      return;
-    }
-
-    const duplicate = findSiblingByName("project", name, currentFolderId, null);
-    if (duplicate) {
-      const replace = confirm(
-        `A work file named "${name}" already exists here.\n\n` +
-        "OK = Replace it (the old file is deleted)\n" +
-        "Cancel = go back and change the name"
-      );
-      if (!replace) return; // leave the dialog open so they can rename
-      await ProjectDB.deleteProject(duplicate.id);
-    }
-
-    const now = Date.now();
-
-    const project = {
-      id: ProjectDB.makeId("project"),
-      name,
-      folderId: currentFolderId,
-      kind: pendingProjectKind,
-      createdAt: now,
-      updatedAt: now,
-
-      pdfData: pendingProjectKind === "pdf" ? pendingPdfData : null,
-      _assetSaved: pendingProjectKind !== "pdf",
-
-      blankWidth:
-        pendingProjectKind === "blank"
-          ? Number(els.blankWidthInput.value || 2400)
-          : null,
-
-      blankHeight:
-        pendingProjectKind === "blank"
-          ? Number(els.blankHeightInput.value || 1600)
-          : null,
-
-      state: {
-        points: [],
-        dataTypes: null,
-        selectedDataId: null,
-        pointMode: "lock",
-        showOrderLabels: false,
-        zoomLevel: 1,
-        commentImageData: "",
-        scrollLeft: 0,
-        scrollTop: 0
-      }
-    };
-
-    await ProjectDB.saveProject(project);
-
-    closeProjectModal();
-    await refreshLibrary();
-    warnIfStorageLow();
-    await openProject(project.id);
-  }
-
-  async function openProject(id) {
-    const project = await ProjectDB.getProject(id);
-
-    if (!project) {
-      alert("Work file not found.");
-      return;
-    }
-
-    els.homeView.classList.add("hidden");
-    els.workspaceView.classList.remove("hidden");
-
-    try {
-      await Workspace.openProject(project);
-    } catch (error) {
-      console.error(error);
-      alert("Could not open this work file.");
-      showLibrary();
-    }
-  }
-
-  function renameSelectedItem() {
-    hideMenus();
-    if (!currentMenuItem) return;
-
-    const record = currentMenuItem.type === "folder"
-      ? folders.find(item => item.id === currentMenuItem.id)
-      : projects.find(item => item.id === currentMenuItem.id);
-    if (!record) return;
-
-    pendingRename = { type: currentMenuItem.type, id: currentMenuItem.id };
-    els.renameModalTitle.textContent =
-      currentMenuItem.type === "folder" ? "Rename Folder" : "Rename File";
-    els.renameInput.value = record.name;
-    els.renameModal.classList.remove("hidden");
-
-    setTimeout(() => {
-      els.renameInput.focus();
-      els.renameInput.select();
-    }, 30);
-  }
-
-  async function confirmRename() {
-    if (!pendingRename) return;
-
-    const name = els.renameInput.value.trim();
-    if (!name) return;
-
-    if (pendingRename.type === "folder") {
-      const folder = folders.find(item => item.id === pendingRename.id);
-      if (!folder) { closeRenameModal(); return; }
-
-      if (findSiblingByName("folder", name, folder.parentId || null, folder.id)) {
-        alert(`A folder named "${name}" already exists here. Please choose a different name.`);
-        return;
-      }
-
-      folder.name = name;
-      await ProjectDB.saveFolder(folder);
-    } else {
-      const project = projects.find(item => item.id === pendingRename.id);
-      if (!project) { closeRenameModal(); return; }
-
-      const duplicate = findSiblingByName("project", name, project.folderId || null, project.id);
-      if (duplicate) {
-        const replace = confirm(
-          `A work file named "${name}" already exists here.\n\n` +
-          "OK = Replace it (the old file is deleted)\n" +
-          "Cancel = keep editing the name"
-        );
-        if (!replace) return;
-        await ProjectDB.deleteProject(duplicate.id);
-      }
-
-      project.name = name;
-      await ProjectDB.saveProject(project);
-    }
-
-    closeRenameModal();
-    await refreshLibrary();
-  }
-
-  function closeRenameModal() {
-    pendingRename = null;
-    els.renameModal.classList.add("hidden");
-  }
-
-  async function exportSelectedFile() {
-    hideMenus();
-
-    if (!currentMenuItem || currentMenuItem.type !== "project") {
-      alert("Only work files can be exported to a single file. For folders, use Backup.");
-      return;
-    }
-
-    try {
-      const project = projects.find(item => item.id === currentMenuItem.id);
-      const data = await ProjectDB.exportProject(currentMenuItem.id);
-      const safeName = (project?.name || "file").replace(/[^\w\-]+/g, "_");
-
-      downloadBlob(
-        new Blob([JSON.stringify(data)], { type: "application/json" }),
-        `${safeName}.fmfile.json`
-      );
-    } catch (error) {
-      alert("Export failed: " + explainDbError(error));
-    }
-  }
-
-  async function handleImportFile(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    let data;
-    try {
-      data = JSON.parse(await file.text());
-    } catch (error) {
-      alert("That file could not be read.");
-      return;
-    }
-
-    if (!data || !["field-measurement-file", "field-measurement-files"].includes(data.format)) {
-      alert("That is not a single-file export. For a whole-library backup file, use Restore instead.");
-      return;
-    }
-
-    try {
-      const files = data.format === "field-measurement-files" && Array.isArray(data.files)
-        ? data.files : [data];
-      const imported = [];
-      for (const fileData of files) {
-        imported.push(await ProjectDB.importProject(fileData, currentFolderId));
-      }
-      await refreshLibrary();
-      alert(imported.length === 1
-        ? `Imported "${imported[0].name}" into this folder.`
-        : `Imported ${imported.length} work files into this folder.`);
-    } catch (error) {
-      alert("Import failed: " + explainDbError(error));
-    }
-  }
-
-  function updateBackupStatus() {
-    if (!els.backupStatus) return;
-
-    let raw = null;
-    try { raw = localStorage.getItem("fm_lastBackupAt"); } catch (_) {}
-
-    if (!raw) {
-      els.backupStatus.textContent =
-        "No backup yet — press Backup to save a copy you can restore.";
-      els.backupStatus.classList.add("warn");
-      return;
-    }
-
-    const days = Math.floor((Date.now() - Number(raw)) / 86400000);
-
-    if (days <= 0) {
-      els.backupStatus.textContent = "Last backup: today.";
-    } else {
-      els.backupStatus.textContent = `Last backup: ${days} day${days > 1 ? "s" : ""} ago.`;
-    }
-    els.backupStatus.classList.toggle("warn", days >= 7);
-  }
-
-  async function duplicateSelectedItem() {
-    hideMenus();
-
-    if (!currentMenuItem || currentMenuItem.type !== "project") return;
-
-    await ProjectDB.duplicateProject(currentMenuItem.id);
-    await refreshLibrary();
-  }
-
-  async function deleteSelectedItem() {
-    hideMenus();
-    if (!currentMenuItem) return;
-
-    if (currentMenuItem.type === "folder") {
-      const folder = folders.find(item => item.id === currentMenuItem.id);
-      if (!folder) return;
-
-      if (!confirm(`Delete empty folder "${folder.name}"?`)) return;
+  async function runRequest(storeName, mode, operation) {
+    const db = await open();
+
+    return new Promise((resolve, reject) => {
+      let tx;
 
       try {
-        await ProjectDB.deleteFolder(folder.id);
+        tx = db.transaction(storeName, mode);
       } catch (error) {
-        alert("This folder is not empty. Delete or move its contents first.");
+        reject(error);
         return;
       }
-    } else {
-      const project = projects.find(item => item.id === currentMenuItem.id);
-      if (!project) return;
 
-      if (!confirm(`Delete "${project.name}"? This cannot be undone.`)) return;
-      await ProjectDB.deleteProject(project.id);
+      const store = tx.objectStore(storeName);
+      let request;
+
+      try {
+        request = operation(store);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      tx.onabort = () => reject(tx.error || new Error("Database transaction aborted."));
+    });
+  }
+
+  function enqueueWrite(task) {
+    const next = writeQueue.then(task, task);
+    writeQueue = next.catch(() => {});
+    return next;
+  }
+
+  async function getAllProjects() {
+    const projects = await runRequest(
+      PROJECTS,
+      "readonly",
+      store => store.getAll()
+    );
+
+    return (projects || []).sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async function getProject(id) {
+    const project = await runRequest(
+      PROJECTS,
+      "readonly",
+      store => store.get(id)
+    );
+
+    if (!project) return null;
+
+    let asset = null;
+
+    try {
+      asset = await runRequest(
+        ASSETS,
+        "readonly",
+        store => store.get(id)
+      );
+    } catch (error) {
+      console.warn("Could not read separate PDF asset:", error);
     }
 
-    await refreshLibrary();
+    /*
+      Compatibility with older Version 4 records:
+      - old records may still contain pdfData directly
+      - newer records use the assets store
+    */
+    if (asset?.pdfData) {
+      project.pdfData = asset.pdfData;
+      project._assetSaved = true;
+    } else if (project.pdfData) {
+      project._assetSaved = false;
+    }
+
+    return project;
+  }
+
+  async function saveProject(project) {
+    return enqueueWrite(async () => {
+      const now = Date.now();
+
+      const record = {
+        ...project,
+        folderId: project.folderId || null,
+        updatedAt: now
+      };
+
+      const pdfData = record.pdfData;
+
+      /*
+        Never place the large PDF ArrayBuffer in the ordinary project record.
+        Also remove private runtime flags.
+      */
+      delete record.pdfData;
+      delete record._assetSaved;
+
+      await runRequest(
+        PROJECTS,
+        "readwrite",
+        store => store.put(record)
+      );
+
+      /*
+        Save the PDF only once:
+        - for a newly imported PDF
+        - for an old record being migrated
+        Ordinary point/autosave updates skip this large write.
+      */
+      if (pdfData && !project._assetSaved) {
+        await runRequest(
+          ASSETS,
+          "readwrite",
+          store => store.put({
+            projectId: record.id,
+            pdfData
+          })
+        );
+
+        project._assetSaved = true;
+      }
+
+      project.updatedAt = now;
+      return project;
+    });
+  }
+
+  async function deleteProject(id) {
+    return enqueueWrite(async () => {
+      await runRequest(
+        PROJECTS,
+        "readwrite",
+        store => store.delete(id)
+      );
+
+      try {
+        await runRequest(
+          ASSETS,
+          "readwrite",
+          store => store.delete(id)
+        );
+      } catch (error) {
+        console.warn("Could not delete PDF asset:", error);
+      }
+    });
+  }
+
+  async function duplicateProject(id) {
+    const original = await getProject(id);
+    if (!original) throw new Error("Project not found.");
+
+    const copy = cloneProject(original);
+    copy.id = makeId("project");
+    copy.name = original.name + " Copy";
+    copy.createdAt = Date.now();
+    copy.updatedAt = Date.now();
+
+    /*
+      The duplicate has a new ID, so its PDF must be written as a new asset.
+    */
+    copy._assetSaved = false;
+
+    await saveProject(copy);
+    return copy;
+  }
+
+  async function getAllFolders() {
+    const folders = await runRequest(
+      FOLDERS,
+      "readonly",
+      store => store.getAll()
+    );
+
+    return (folders || []).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true })
+    );
+  }
+
+  async function saveFolder(folder) {
+    return enqueueWrite(async () => {
+      const record = {
+        ...folder,
+        parentId: folder.parentId || null,
+        updatedAt: Date.now()
+      };
+
+      await runRequest(
+        FOLDERS,
+        "readwrite",
+        store => store.put(record)
+      );
+
+      folder.updatedAt = record.updatedAt;
+      return folder;
+    });
+  }
+
+  async function deleteFolder(folderId) {
+    const projects = await getAllProjects();
+    const folders = await getAllFolders();
+
+    const hasProjects = projects.some(project => project.folderId === folderId);
+    const hasSubfolders = folders.some(folder => folder.parentId === folderId);
+
+    if (hasProjects || hasSubfolders) {
+      throw new Error("Folder is not empty.");
+    }
+
+    return enqueueWrite(() =>
+      runRequest(
+        FOLDERS,
+        "readwrite",
+        store => store.delete(folderId)
+      )
+    );
+  }
+
+  function cloneProject(project) {
+    if (typeof structuredClone === "function") {
+      return structuredClone(project);
+    }
+
+    const clone = {
+      ...project,
+      state: JSON.parse(JSON.stringify(project.state || {}))
+    };
+
+    if (project.pdfData instanceof ArrayBuffer) {
+      clone.pdfData = project.pdfData.slice(0);
+    }
+
+    return clone;
+  }
+
+  function makeId(prefix) {
+    return crypto.randomUUID
+      ? crypto.randomUUID()
+      : prefix + "_" + Date.now() + "_" + Math.random().toString(16).slice(2);
+  }
+
+  function explainError(error) {
+    if (!error) return "Unknown database error.";
+
+    if (error.name === "QuotaExceededError") {
+      return "This iPad is low on website storage. Delete unused work files or free device storage.";
+    }
+
+    if (error.name === "InvalidStateError") {
+      return "The local database connection was interrupted. Close other tabs of this app and reload.";
+    }
+
+    if (error.name === "DataCloneError") {
+      return "Some project data could not be stored. Reload the app and try again.";
+    }
+
+    return `${error.name || "Error"}: ${error.message || String(error)}`;
   }
 
   /* ---------- Whole-library backup and restore ---------- */
 
-  async function downloadBackup() {
-    els.backupBtn.disabled = true;
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunkSize = 0x8000;
 
-    try {
-      const backup = await ProjectDB.exportAll();
-      const stamp = new Date().toISOString().slice(0, 10);
-
-      downloadBlob(
-        new Blob([JSON.stringify(backup)], { type: "application/json" }),
-        `field-measurement-backup-${stamp}.json`
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(
+        null,
+        bytes.subarray(i, i + chunkSize)
       );
-
-      try { localStorage.setItem("fm_lastBackupAt", String(Date.now())); } catch (_) {}
-      updateBackupStatus();
-
-      alert(
-        "Backup saved.\n\n" +
-        `${backup.counts.folders} folders\n` +
-        `${backup.counts.projects} work files\n` +
-        `${backup.counts.assets} PDF drawings\n\n` +
-        "Keep this file somewhere safe: email it to yourself, or save it to a " +
-        "cloud drive or another device."
-      );
-    } catch (error) {
-      alert("Backup failed: " + explainDbError(error));
-    } finally {
-      els.backupBtn.disabled = false;
     }
+
+    return btoa(binary);
   }
 
-  async function handleRestoreFile(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
 
-    let backup;
-
-    try {
-      backup = JSON.parse(await file.text());
-    } catch (error) {
-      alert("That file could not be read as a backup.");
-      return;
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
     }
+
+    return bytes.buffer;
+  }
+
+  /*
+    Read every folder, project, and PDF asset and return one JSON-safe object.
+    ArrayBuffers (PDF data) are encoded as base64 so the result can be
+    stringified to a .json backup file.
+  */
+  async function exportAll() {
+    const projects = await runRequest(PROJECTS, "readonly", store => store.getAll());
+    const folders = await runRequest(FOLDERS, "readonly", store => store.getAll());
+    const assets = await runRequest(ASSETS, "readonly", store => store.getAll());
+
+    const safeProjects = (projects || []).map(project => {
+      const copy = { ...project };
+
+      // Older Version 4 records may still hold the PDF inside the project.
+      if (copy.pdfData instanceof ArrayBuffer) {
+        copy.pdfData = arrayBufferToBase64(copy.pdfData);
+        copy._pdfIsBase64 = true;
+      } else {
+        delete copy.pdfData;
+      }
+
+      delete copy._assetSaved;
+      return copy;
+    });
+
+    const safeAssets = (assets || []).map(asset => ({
+      projectId: asset.projectId,
+      pdfData: asset.pdfData instanceof ArrayBuffer
+        ? arrayBufferToBase64(asset.pdfData)
+        : null
+    }));
+
+    return {
+      format: "field-measurement-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      counts: {
+        folders: (folders || []).length,
+        projects: safeProjects.length,
+        assets: safeAssets.length
+      },
+      data: {
+        folders: folders || [],
+        projects: safeProjects,
+        assets: safeAssets
+      }
+    };
+  }
+
+  async function exportSelected(projectIds) {
+    const wanted = new Set(Array.isArray(projectIds) ? projectIds : []);
+    const allProjects = await runRequest(PROJECTS, "readonly", store => store.getAll());
+    const allAssets = await runRequest(ASSETS, "readonly", store => store.getAll());
+    const selectedProjects = (allProjects || []).filter(project => wanted.has(project.id));
+    const selectedAssets = (allAssets || []).filter(asset => wanted.has(asset.projectId));
+
+    const safeProjects = selectedProjects.map(project => {
+      const copy = { ...project };
+      if (copy.pdfData instanceof ArrayBuffer) {
+        copy.pdfData = arrayBufferToBase64(copy.pdfData);
+        copy._pdfIsBase64 = true;
+      } else {
+        delete copy.pdfData;
+      }
+      delete copy._assetSaved;
+      return copy;
+    });
+
+    const safeAssets = selectedAssets.map(asset => ({
+      projectId: asset.projectId,
+      pdfData: asset.pdfData instanceof ArrayBuffer
+        ? arrayBufferToBase64(asset.pdfData)
+        : null
+    }));
+
+    return {
+      format: "field-measurement-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      selectionOnly: true,
+      counts: { folders: 0, projects: safeProjects.length, assets: safeAssets.length },
+      data: { folders: [], projects: safeProjects, assets: safeAssets }
+    };
+  }
+
+  async function exportProjectBundle(projectIds) {
+    const files = [];
+    for (const id of projectIds || []) files.push(await exportProject(id));
+    return {
+      format: "field-measurement-files",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      files
+    };
+  }
+
+  /*
+    Restore a backup object produced by exportAll().
+    - mode "merge"   : add or overwrite items that share an id, keep the rest.
+    - mode "replace" : clear all three stores first, then load the backup.
+    All writes run inside a single transaction so a failure leaves the
+    database unchanged.
+  */
+  async function importAll(backup, options = {}) {
+    const mode = options.mode === "replace" ? "replace" : "merge";
 
     if (!backup || backup.format !== "field-measurement-backup" || !backup.data) {
-      alert("That file is not a Field Measurement backup.");
-      return;
+      throw new Error("This file is not a Field Measurement backup.");
     }
 
-    pendingBackup = backup;
-    openRestoreModal(backup);
-  }
+    const folders = Array.isArray(backup.data.folders) ? backup.data.folders : [];
+    const projects = Array.isArray(backup.data.projects) ? backup.data.projects : [];
+    const assets = Array.isArray(backup.data.assets) ? backup.data.assets : [];
 
-  function openRestoreModal(backup) {
-    const counts = backup.counts || {};
+    return enqueueWrite(async () => {
+      const db = await open();
 
-    const made = backup.exportedAt
-      ? new Date(backup.exportedAt).toLocaleString()
-      : "an unknown date";
+      return new Promise((resolve, reject) => {
+        let tx;
 
-    els.restoreSummary.textContent =
-      `This backup was made ${made} and contains ` +
-      `${counts.folders ?? "?"} folders, ${counts.projects ?? "?"} work files, ` +
-      `and ${counts.assets ?? "?"} PDF drawings.`;
-
-    disarmReplace();
-    els.restoreModal.classList.remove("hidden");
-  }
-
-  function closeRestoreModal() {
-    els.restoreModal.classList.add("hidden");
-    pendingBackup = null;
-    disarmReplace();
-  }
-
-  function handleReplaceClick() {
-    if (!replaceArmed) {
-      replaceArmed = true;
-      els.restoreReplaceBtn.textContent = "Tap again to Replace All";
-      return;
-    }
-
-    runRestore("replace");
-  }
-
-  function disarmReplace() {
-    replaceArmed = false;
-
-    if (els.restoreReplaceBtn) {
-      els.restoreReplaceBtn.textContent = "Replace All";
-    }
-  }
-
-  async function runRestore(mode) {
-    if (!pendingBackup) return;
-
-    const backup = pendingBackup;
-
-    els.restoreMergeBtn.disabled = true;
-    els.restoreReplaceBtn.disabled = true;
-
-    try {
-      const result = await ProjectDB.importAll(backup, { mode });
-
-      closeRestoreModal();
-      currentFolderId = null;
-      els.projectSearch.value = "";
-      await refreshLibrary();
-
-      alert(
-        (mode === "replace" ? "Replaced with backup.\n\n" : "Backup merged.\n\n") +
-        `${result.folders} folders and ${result.projects} work files ` +
-        "are now on this device."
-      );
-    } catch (error) {
-      alert("Restore failed: " + explainDbError(error));
-    } finally {
-      els.restoreMergeBtn.disabled = false;
-      els.restoreReplaceBtn.disabled = false;
-    }
-  }
-
-  function explainDbError(error) {
-    return window.ProjectDB?.explainError
-      ? ProjectDB.explainError(error)
-      : (error?.message || String(error));
-  }
-
-  function downloadBlob(blob, fileName) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = fileName;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  /* ---------- Warning banner, multi-tab detection, storage check ---------- */
-
-  function showBanner(message) {
-    if (!els.appBanner) return;
-    els.appBannerText.textContent = message;
-    els.appBanner.classList.remove("hidden");
-  }
-
-  function hideBanner() {
-    if (!els.appBanner) return;
-    els.appBanner.classList.add("hidden");
-  }
-
-  /*
-    Detect the same app being open in more than one tab/window, which can
-    cause overlapping saves to the shared local database.
-  */
-  function setupTabDetection() {
-    if (typeof BroadcastChannel === "undefined") return;
-
-    try {
-      const channel = new BroadcastChannel("field-measurement-tabs");
-      const myId = Math.random().toString(16).slice(2);
-
-      channel.onmessage = event => {
-        const data = event.data || {};
-        if (data.tabId === myId) return;
-
-        if (data.type === "hello") {
-          channel.postMessage({ type: "here", tabId: myId });
-          warnMultipleTabs();
-        } else if (data.type === "here") {
-          warnMultipleTabs();
+        try {
+          tx = db.transaction([PROJECTS, FOLDERS, ASSETS], "readwrite");
+        } catch (error) {
+          reject(error);
+          return;
         }
-      };
 
-      channel.postMessage({ type: "hello", tabId: myId });
-    } catch (error) {
-      /* BroadcastChannel unavailable or blocked: skip detection */
+        tx.oncomplete = () => resolve({
+          mode,
+          folders: folders.length,
+          projects: projects.length,
+          assets: assets.length
+        });
+        tx.onerror = () => reject(tx.error || new Error("Import failed."));
+        tx.onabort = () => reject(tx.error || new Error("Import was aborted."));
+
+        const projectStore = tx.objectStore(PROJECTS);
+        const folderStore = tx.objectStore(FOLDERS);
+        const assetStore = tx.objectStore(ASSETS);
+
+        if (mode === "replace") {
+          projectStore.clear();
+          folderStore.clear();
+          assetStore.clear();
+        }
+
+        folders.forEach(folder => {
+          if (folder && folder.id) folderStore.put(folder);
+        });
+
+        projects.forEach(project => {
+          if (!project || !project.id) return;
+
+          const record = { ...project };
+
+          // Legacy projects stored their PDF as base64 in the export.
+          if (record._pdfIsBase64 && typeof record.pdfData === "string") {
+            record.pdfData = base64ToArrayBuffer(record.pdfData);
+            delete record._pdfIsBase64;
+          }
+
+          projectStore.put(record);
+        });
+
+        assets.forEach(asset => {
+          if (!asset || !asset.projectId) return;
+
+          assetStore.put({
+            projectId: asset.projectId,
+            pdfData: typeof asset.pdfData === "string"
+              ? base64ToArrayBuffer(asset.pdfData)
+              : null
+          });
+        });
+      });
+    });
+  }
+
+  /* ---------- Single-file export / import (share one work file) ---------- */
+
+  async function exportProject(id) {
+    const project = await getProject(id);
+    if (!project) throw new Error("File not found.");
+
+    const copy = { ...project };
+
+    if (copy.pdfData instanceof ArrayBuffer) {
+      copy.pdfData = arrayBufferToBase64(copy.pdfData);
+      copy._pdfIsBase64 = true;
+    } else {
+      delete copy.pdfData;
     }
+    delete copy._assetSaved;
+
+    return {
+      format: "field-measurement-file",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      project: copy
+    };
   }
 
-  function warnMultipleTabs() {
-    showBanner(
-      "This app is open in more than one tab or window. To avoid save " +
-      "conflicts, keep only one open."
-    );
-  }
+  async function importProject(fileData, folderId) {
+    if (!fileData || fileData.format !== "field-measurement-file" || !fileData.project) {
+      throw new Error("This file is not a Field Measurement file export.");
+    }
 
-  /*
-    Warn before the device actually runs out of website storage, rather than
-    only reporting it after a save has already failed.
-  */
-  async function warnIfStorageLow() {
-    if (!navigator.storage || !navigator.storage.estimate) return;
+    const source = fileData.project;
+    const newId = makeId("project");
 
-    try {
-      const { usage, quota } = await navigator.storage.estimate();
-      if (!quota) return;
+    const record = {
+      ...source,
+      id: newId,
+      folderId: folderId || null,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
 
-      if (usage / quota > 0.9) {
-        showBanner(
-          "This device is almost out of storage for the app. Make a Backup, " +
-          "then delete work files you no longer need."
-        );
+    let pdfBuffer = null;
+    if (record._pdfIsBase64 && typeof record.pdfData === "string") {
+      pdfBuffer = base64ToArrayBuffer(record.pdfData);
+      delete record._pdfIsBase64;
+    }
+    delete record.pdfData;
+    delete record._assetSaved;
+
+    return enqueueWrite(async () => {
+      await runRequest(PROJECTS, "readwrite", store => store.put(record));
+
+      if (pdfBuffer) {
+        await runRequest(ASSETS, "readwrite", store => store.put({
+          projectId: newId,
+          pdfData: pdfBuffer
+        }));
       }
-    } catch (error) {
-      /* estimate unavailable: ignore */
-    }
-  }
 
-  function showLibrary() {
-    els.workspaceView.classList.add("hidden");
-    els.homeView.classList.remove("hidden");
-    refreshLibrary();
-  }
-
-  function hideMenus() {
-    els.newProjectMenu.classList.add("hidden");
-    els.libraryContextMenu.classList.add("hidden");
-  }
-
-  function positionMenu(menu, x, y, width, height) {
-    menu.style.left =
-      Math.max(8, Math.min(x, window.innerWidth - width - 8)) + "px";
-
-    menu.style.top =
-      Math.max(8, Math.min(y, window.innerHeight - height - 8)) + "px";
-
-    menu.classList.remove("hidden");
-  }
-
-  function formatDate(timestamp) {
-    if (!timestamp) return "unknown";
-
-    return new Date(timestamp).toLocaleString([], {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit"
+      return record;
     });
   }
 
   return {
-    init,
-    start,
-    showLibrary,
-    refreshLibrary
+    open,
+    exportAll,
+    exportSelected,
+    exportProjectBundle,
+    importAll,
+    exportProject,
+    importProject,
+    getAllProjects,
+    getProject,
+    saveProject,
+    deleteProject,
+    duplicateProject,
+    getAllFolders,
+    saveFolder,
+    deleteFolder,
+    makeId,
+    explainError
   };
 })();
-
-document.addEventListener("DOMContentLoaded", async () => {
-  Workspace.init();
-  App.init();
-  await App.start();
-});
