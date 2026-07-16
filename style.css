@@ -1509,7 +1509,6 @@ button {
 }
 .point.noSidePoint {
   opacity: 0.9;
-  color: #8a8f98 !important;
 }
 .point.excludedPoint {
   opacity: 0.35;

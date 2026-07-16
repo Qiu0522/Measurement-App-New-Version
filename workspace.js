@@ -14,6 +14,7 @@ const Workspace = (() => {
   let dataTypes = [];
 
   let pointMode = "lock";
+  let dataTypeModalFromManage = false;
   let commentTool = "none";
   let brushColor = "#ff0000";
   let brushWidth = 5;
@@ -224,6 +225,7 @@ const Workspace = (() => {
     els.manageDataTypesModal = document.getElementById("manageDataTypesModal");
     els.manageDataTypesList = document.getElementById("manageDataTypesList");
     els.closeManageDataTypesBtn = document.getElementById("closeManageDataTypesBtn");
+    els.addDataTypeFromManageBtn = document.getElementById("addDataTypeFromManageBtn");
 
 
     els.sideModal = document.getElementById("sideModal");
@@ -614,6 +616,11 @@ const Workspace = (() => {
     els.cancelDataTypeBtn.addEventListener("click", () => {
       els.dataTypeModal.classList.add("hidden");
       renderDataSelect(dataTypes[0]?.id);
+      if (dataTypeModalFromManage) {
+        dataTypeModalFromManage = false;
+        renderManageDataTypesList();
+        els.manageDataTypesModal.classList.remove("hidden");
+      }
     });
 
     els.confirmDataTypeBtn.addEventListener("click", confirmDataType);
@@ -621,6 +628,14 @@ const Workspace = (() => {
     els.manageDataTypesBtn.addEventListener("click", openManageDataTypesModal);
     els.closeManageDataTypesBtn.addEventListener("click", () => {
       els.manageDataTypesModal.classList.add("hidden");
+    });
+
+    els.addDataTypeFromManageBtn.addEventListener("click", () => {
+      dataTypeModalFromManage = true;
+      els.manageDataTypesModal.classList.add("hidden");
+      els.dataTypeNameInput.value = "New Data";
+      els.dataTypeColorInput.value = "#000000";
+      els.dataTypeModal.classList.remove("hidden");
     });
 
 
@@ -1077,6 +1092,12 @@ const Workspace = (() => {
     els.dataTypeModal.classList.add("hidden");
     renderDataSelect(dataType.id);
     scheduleAutoSave();
+
+    if (dataTypeModalFromManage) {
+      dataTypeModalFromManage = false;
+      renderManageDataTypesList();
+      els.manageDataTypesModal.classList.remove("hidden");
+    }
   }
 
   function openManageDataTypesModal() {
