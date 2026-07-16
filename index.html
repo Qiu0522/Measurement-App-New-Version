@@ -530,13 +530,27 @@
   <div id="manageDataTypesModal" class="modalBackdrop hidden">
     <div class="modalCard manageDataTypesCard">
       <h2>Manage Data Types</h2>
-      <p class="manageDataTypesHint">Rename or recolor a data type any time. Deleting a data type that still has points will permanently delete those points too — you'll be asked to confirm the exact count first.</p>
+      <p class="manageDataTypesHint">Rename or recolor a data type any time. Deleting a data type that still has points will ask whether to move those points to another data type first, or delete them permanently.</p>
 
       <div id="manageDataTypesList" class="manageDataTypesList"></div>
 
       <div class="modalActions">
         <button id="addDataTypeFromManageBtn" type="button">+ Add Data Type</button>
         <button id="closeManageDataTypesBtn" class="primaryButton" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="reassignDataTypeModal" class="modalBackdrop hidden">
+    <div class="modalCard reassignDataTypeCard">
+      <h2 id="reassignDataTypeTitle">Move points before deleting?</h2>
+      <p id="reassignDataTypeHint" class="reassignDataTypeHint"></p>
+
+      <div id="reassignDataTypeList" class="dataTypePickerList"></div>
+
+      <div class="modalActions">
+        <button id="deleteDataTypePermanentlyBtn" class="dangerButton" type="button">Delete permanently instead</button>
+        <button id="cancelReassignDataTypeBtn" class="primaryButton" type="button">Cancel</button>
       </div>
     </div>
   </div>

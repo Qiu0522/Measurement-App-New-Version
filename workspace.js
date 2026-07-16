@@ -15,6 +15,7 @@ const Workspace = (() => {
 
   let pointMode = "lock";
   let dataTypeModalFromManage = false;
+  let pendingDeleteDataTypeId = null;
   let commentTool = "none";
   let brushColor = "#ff0000";
   let brushWidth = 5;
@@ -232,6 +233,13 @@ const Workspace = (() => {
     els.dataTypePickerLabel = document.getElementById("dataTypePickerLabel");
     els.manageDataTypesFromPickerBtn = document.getElementById("manageDataTypesFromPickerBtn");
     els.cancelDataTypePickerBtn = document.getElementById("cancelDataTypePickerBtn");
+
+    els.reassignDataTypeModal = document.getElementById("reassignDataTypeModal");
+    els.reassignDataTypeTitle = document.getElementById("reassignDataTypeTitle");
+    els.reassignDataTypeHint = document.getElementById("reassignDataTypeHint");
+    els.reassignDataTypeList = document.getElementById("reassignDataTypeList");
+    els.deleteDataTypePermanentlyBtn = document.getElementById("deleteDataTypePermanentlyBtn");
+    els.cancelReassignDataTypeBtn = document.getElementById("cancelReassignDataTypeBtn");
 
 
     els.sideModal = document.getElementById("sideModal");
@@ -622,6 +630,14 @@ const Workspace = (() => {
     els.cancelDataTypeBtn.addEventListener("click", () => {
       els.dataTypeModal.classList.add("hidden");
       renderDataSelect(dataTypes[0]?.id);
+
+      if (pendingDeleteDataTypeId) {
+        // Cancelling "create new type" mid-delete-flow: go back to the
+        // reassign picker rather than losing the pending-delete context.
+        openReassignModal(pendingDeleteDataTypeId);
+        return;
+      }
+
       if (dataTypeModalFromManage) {
         dataTypeModalFromManage = false;
         renderManageDataTypesList();
@@ -650,6 +666,22 @@ const Workspace = (() => {
       els.dataTypeNameInput.value = "New Data";
       els.dataTypeColorInput.value = "#000000";
       els.dataTypeModal.classList.remove("hidden");
+    });
+
+    els.cancelReassignDataTypeBtn.addEventListener("click", () => {
+      pendingDeleteDataTypeId = null;
+      els.reassignDataTypeModal.classList.add("hidden");
+      renderManageDataTypesList();
+      els.manageDataTypesModal.classList.remove("hidden");
+    });
+
+    els.deleteDataTypePermanentlyBtn.addEventListener("click", () => {
+      if (!pendingDeleteDataTypeId) return;
+      deleteDataTypeAndPoints(pendingDeleteDataTypeId);
+      pendingDeleteDataTypeId = null;
+      els.reassignDataTypeModal.classList.add("hidden");
+      renderManageDataTypesList();
+      els.manageDataTypesModal.classList.remove("hidden");
     });
 
 
@@ -1142,6 +1174,15 @@ const Workspace = (() => {
     renderDataSelect(dataType.id);
     scheduleAutoSave();
 
+    if (pendingDeleteDataTypeId) {
+      const sourceId = pendingDeleteDataTypeId;
+      pendingDeleteDataTypeId = null;
+      reassignPointsAndDeleteDataType(sourceId, dataType.id);
+      renderManageDataTypesList();
+      els.manageDataTypesModal.classList.remove("hidden");
+      return;
+    }
+
     if (dataTypeModalFromManage) {
       dataTypeModalFromManage = false;
       renderManageDataTypesList();
@@ -1219,20 +1260,105 @@ const Workspace = (() => {
 
     const affectedPoints = points.filter(point => point.dataId === dataId);
 
-    const confirmMessage = affectedPoints.length
-      ? `"${dataType.name}" has ${affectedPoints.length} point(s) on this drawing.\n\n` +
-        `Deleting this data type will PERMANENTLY delete all ${affectedPoints.length} of those points too. ` +
-        "This cannot be undone.\n\nDelete the data type and its points?"
-      : `Delete the data type "${dataType.name}"? It has no points, so nothing else will be affected.`;
+    if (!affectedPoints.length) {
+      if (!confirm(`Delete the data type "${dataType.name}"? It has no points, so nothing else will be affected.`)) return;
+      deleteDataTypeAndPoints(dataId);
+      renderManageDataTypesList();
+      return;
+    }
 
-    if (!confirm(confirmMessage)) return;
+    openReassignModal(dataId);
+  }
 
+  function openReassignModal(dataId) {
+    const dataType = getDataType(dataId);
+    if (!dataType) return;
+
+    pendingDeleteDataTypeId = dataId;
+    const affectedCount = points.filter(point => point.dataId === dataId).length;
+
+    els.reassignDataTypeTitle.textContent = `Move ${affectedCount} point(s) out of "${dataType.name}"?`;
+    els.reassignDataTypeHint.textContent =
+      `"${dataType.name}" has ${affectedCount} point(s). Pick another data type to move them to before ` +
+      "deleting this one, or delete everything permanently below.";
+
+    renderReassignDataTypeList(dataId);
+    els.manageDataTypesModal.classList.add("hidden");
+    els.reassignDataTypeModal.classList.remove("hidden");
+  }
+
+  function renderReassignDataTypeList(sourceId) {
+    els.reassignDataTypeList.innerHTML = "";
+
+    dataTypes.filter(dt => dt.id !== sourceId).forEach(dataType => {
+      const pointCount = points.filter(point => point.dataId === dataType.id).length;
+
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "dataTypePickerRow";
+
+      const swatch = document.createElement("span");
+      swatch.className = "dataTypePickerRowSwatch";
+      swatch.style.background = dataType.color || "#111";
+
+      const name = document.createElement("span");
+      name.className = "dataTypePickerRowName";
+      name.textContent = `Move to "${dataType.name}"`;
+
+      const count = document.createElement("span");
+      count.className = "dataTypePickerRowCount";
+      count.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
+
+      row.appendChild(swatch);
+      row.appendChild(name);
+      row.appendChild(count);
+
+      row.addEventListener("click", () => {
+        reassignPointsAndDeleteDataType(sourceId, dataType.id);
+        pendingDeleteDataTypeId = null;
+        els.reassignDataTypeModal.classList.add("hidden");
+        renderManageDataTypesList();
+        els.manageDataTypesModal.classList.remove("hidden");
+      });
+
+      els.reassignDataTypeList.appendChild(row);
+    });
+
+    const createRow = document.createElement("button");
+    createRow.type = "button";
+    createRow.className = "dataTypePickerRow createNewDataTypeRow";
+    createRow.textContent = "+ Create New Data Type";
+    createRow.addEventListener("click", () => {
+      // pendingDeleteDataTypeId stays set — confirmDataType() checks it
+      // and finishes the reassign-and-delete once the new type exists.
+      els.reassignDataTypeModal.classList.add("hidden");
+      els.dataTypeNameInput.value = "New Data";
+      els.dataTypeColorInput.value = "#000000";
+      els.dataTypeModal.classList.remove("hidden");
+    });
+    els.reassignDataTypeList.appendChild(createRow);
+  }
+
+  function reassignPointsAndDeleteDataType(sourceId, destinationId) {
+    points.forEach(point => {
+      if (point.dataId === sourceId) point.dataId = destinationId;
+    });
+    dataTypes = dataTypes.filter(dt => dt.id !== sourceId);
+
+    renderDataSelect(els.dataSelect.value === sourceId ? destinationId : undefined);
+    refreshAllPoints();
+    updateNoSideBanner();
+    scheduleAutoSave();
+    setStatus(`Points moved to "${getDataType(destinationId)?.name || "the new data type"}".`);
+  }
+
+  function deleteDataTypeAndPoints(dataId) {
+    const affectedPoints = points.filter(point => point.dataId === dataId);
     affectedPoints.forEach(point => removePointElement(point.uid));
     points = points.filter(point => point.dataId !== dataId);
     dataTypes = dataTypes.filter(dt => dt.id !== dataId);
 
     renderDataSelect(dataTypes[0]?.id);
-    renderManageDataTypesList();
     refreshAllPoints();
     updateNoSideBanner();
     scheduleAutoSave();

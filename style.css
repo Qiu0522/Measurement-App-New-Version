@@ -2150,3 +2150,23 @@ button {
   font-size: 12px;
   color: #666;
 }
+
+
+/* ---------- Reassign Data Type modal (shown when deleting a type with points) ---------- */
+.reassignDataTypeCard {
+  width: min(480px, 96vw);
+}
+
+.reassignDataTypeHint {
+  font-size: 13px;
+  color: #555;
+  margin: 4px 0 14px;
+  line-height: 1.4;
+}
+
+.dataTypePickerRow.createNewDataTypeRow {
+  border-style: dashed;
+  color: #2b6ef2;
+  font-weight: 600;
+  justify-content: center;
+}
