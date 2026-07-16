@@ -220,6 +220,12 @@ const Workspace = (() => {
     els.cancelDataTypeBtn = document.getElementById("cancelDataTypeBtn");
     els.confirmDataTypeBtn = document.getElementById("confirmDataTypeBtn");
 
+    els.manageDataTypesBtn = document.getElementById("manageDataTypesBtn");
+    els.manageDataTypesModal = document.getElementById("manageDataTypesModal");
+    els.manageDataTypesList = document.getElementById("manageDataTypesList");
+    els.closeManageDataTypesBtn = document.getElementById("closeManageDataTypesBtn");
+
+
     els.sideModal = document.getElementById("sideModal");
     els.cancelSideBtn = document.getElementById("cancelSideBtn");
 
@@ -611,6 +617,12 @@ const Workspace = (() => {
     });
 
     els.confirmDataTypeBtn.addEventListener("click", confirmDataType);
+
+    els.manageDataTypesBtn.addEventListener("click", openManageDataTypesModal);
+    els.closeManageDataTypesBtn.addEventListener("click", () => {
+      els.manageDataTypesModal.classList.add("hidden");
+    });
+
 
     els.sideModal.querySelectorAll("[data-side]").forEach(button => {
       button.addEventListener("click", () => {
@@ -1064,6 +1076,95 @@ const Workspace = (() => {
 
     els.dataTypeModal.classList.add("hidden");
     renderDataSelect(dataType.id);
+    scheduleAutoSave();
+  }
+
+  function openManageDataTypesModal() {
+    renderManageDataTypesList();
+    els.manageDataTypesModal.classList.remove("hidden");
+  }
+
+  function renderManageDataTypesList() {
+    els.manageDataTypesList.innerHTML = "";
+
+    dataTypes.forEach(dataType => {
+      const pointCount = points.filter(point => point.dataId === dataType.id).length;
+
+      const row = document.createElement("div");
+      row.className = "manageDataTypeRow";
+
+      const colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.value = dataType.color || "#000000";
+      colorInput.title = "Color";
+      colorInput.addEventListener("input", () => {
+        dataType.color = colorInput.value;
+        updateDataTypeSwatch();
+        renderDataSelect(els.dataSelect.value);
+        refreshAllPoints();
+        scheduleAutoSave();
+      });
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = dataType.name;
+      nameInput.title = "Name";
+      nameInput.addEventListener("change", () => {
+        const trimmed = nameInput.value.trim();
+        if (!trimmed) {
+          nameInput.value = dataType.name; // reject blank names, restore previous
+          return;
+        }
+        dataType.name = trimmed;
+        renderDataSelect(els.dataSelect.value);
+        scheduleAutoSave();
+      });
+
+      const countLabel = document.createElement("span");
+      countLabel.className = "manageDataTypeCount";
+      countLabel.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "manageDataTypeDeleteBtn";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", () => deleteDataType(dataType.id));
+
+      row.appendChild(colorInput);
+      row.appendChild(nameInput);
+      row.appendChild(countLabel);
+      row.appendChild(deleteBtn);
+      els.manageDataTypesList.appendChild(row);
+    });
+  }
+
+  function deleteDataType(dataId) {
+    if (dataTypes.length <= 1) {
+      alert("You need at least one data type — add a new one before deleting this one.");
+      return;
+    }
+
+    const dataType = getDataType(dataId);
+    if (!dataType) return;
+
+    const affectedPoints = points.filter(point => point.dataId === dataId);
+
+    const confirmMessage = affectedPoints.length
+      ? `"${dataType.name}" has ${affectedPoints.length} point(s) on this drawing.\n\n` +
+        `Deleting this data type will PERMANENTLY delete all ${affectedPoints.length} of those points too. ` +
+        "This cannot be undone.\n\nDelete the data type and its points?"
+      : `Delete the data type "${dataType.name}"? It has no points, so nothing else will be affected.`;
+
+    if (!confirm(confirmMessage)) return;
+
+    affectedPoints.forEach(point => removePointElement(point.uid));
+    points = points.filter(point => point.dataId !== dataId);
+    dataTypes = dataTypes.filter(dt => dt.id !== dataId);
+
+    renderDataSelect(dataTypes[0]?.id);
+    renderManageDataTypesList();
+    refreshAllPoints();
+    updateNoSideBanner();
     scheduleAutoSave();
   }
 

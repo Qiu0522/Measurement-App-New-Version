@@ -553,7 +553,7 @@ button {
   position: absolute;
   z-index: 10;
   min-width: 22px;
-  padding: 0;
+  padding: 10px;
   border: none;
   outline: none;
   background: transparent;
@@ -2005,4 +2005,75 @@ button {
   .quickFractionPad button {
     font-size: 18px;
   }
+}
+
+
+/* ---------- Manage Data Types modal ---------- */
+.manageDataTypesCard {
+  width: min(560px, 96vw);
+}
+
+.manageDataTypesHint {
+  font-size: 13px;
+  color: #555;
+  margin: 4px 0 14px;
+  line-height: 1.4;
+}
+
+.manageDataTypesList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.manageDataTypeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #dde1e6;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.manageDataTypeRow input[type="color"] {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  flex: none;
+}
+
+.manageDataTypeRow input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 15px;
+}
+
+.manageDataTypeRow .manageDataTypeCount {
+  flex: none;
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  min-width: 62px;
+  text-align: right;
+}
+
+.manageDataTypeRow .manageDataTypeDeleteBtn {
+  flex: none;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid #e5b3b3;
+  border-radius: 6px;
+  background: #fdecec;
+  color: #a52222;
+  font-weight: 600;
 }
