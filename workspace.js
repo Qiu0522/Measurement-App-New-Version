@@ -221,11 +221,17 @@ const Workspace = (() => {
     els.cancelDataTypeBtn = document.getElementById("cancelDataTypeBtn");
     els.confirmDataTypeBtn = document.getElementById("confirmDataTypeBtn");
 
-    els.manageDataTypesBtn = document.getElementById("manageDataTypesBtn");
     els.manageDataTypesModal = document.getElementById("manageDataTypesModal");
     els.manageDataTypesList = document.getElementById("manageDataTypesList");
     els.closeManageDataTypesBtn = document.getElementById("closeManageDataTypesBtn");
     els.addDataTypeFromManageBtn = document.getElementById("addDataTypeFromManageBtn");
+
+    els.dataTypePickerBtn = document.getElementById("dataTypePickerBtn");
+    els.dataTypePickerModal = document.getElementById("dataTypePickerModal");
+    els.dataTypePickerList = document.getElementById("dataTypePickerList");
+    els.dataTypePickerLabel = document.getElementById("dataTypePickerLabel");
+    els.manageDataTypesFromPickerBtn = document.getElementById("manageDataTypesFromPickerBtn");
+    els.cancelDataTypePickerBtn = document.getElementById("cancelDataTypePickerBtn");
 
 
     els.sideModal = document.getElementById("sideModal");
@@ -625,7 +631,15 @@ const Workspace = (() => {
 
     els.confirmDataTypeBtn.addEventListener("click", confirmDataType);
 
-    els.manageDataTypesBtn.addEventListener("click", openManageDataTypesModal);
+    els.dataTypePickerBtn.addEventListener("click", openDataTypePicker);
+    els.cancelDataTypePickerBtn.addEventListener("click", () => {
+      els.dataTypePickerModal.classList.add("hidden");
+    });
+    els.manageDataTypesFromPickerBtn.addEventListener("click", () => {
+      els.dataTypePickerModal.classList.add("hidden");
+      openManageDataTypesModal();
+    });
+
     els.closeManageDataTypesBtn.addEventListener("click", () => {
       els.manageDataTypesModal.classList.add("hidden");
     });
@@ -1037,11 +1051,6 @@ const Workspace = (() => {
       els.dataSelect.appendChild(option);
     });
 
-    const addOption = document.createElement("option");
-    addOption.value = "__add_data_type__";
-    addOption.textContent = "+ Add Data Type";
-    els.dataSelect.appendChild(addOption);
-
     if (dataTypes.some(dataType => dataType.id === previousValue)) {
       els.dataSelect.value = previousValue;
     } else if (dataTypes.length) {
@@ -1055,18 +1064,58 @@ const Workspace = (() => {
     if (!els.dataTypeSwatch) return;
     const dataType = getDataType(els.dataSelect.value);
     els.dataTypeSwatch.style.background = dataType ? (dataType.color || "#111") : "transparent";
+    if (els.dataTypePickerLabel) {
+      els.dataTypePickerLabel.textContent = dataType ? dataType.name : "Data Type";
+    }
   }
 
   function handleDataSelectChange() {
-    if (els.dataSelect.value !== "__add_data_type__") {
-      updateDataTypeSwatch();
-      scheduleAutoSave();
-      return;
-    }
+    updateDataTypeSwatch();
+    scheduleAutoSave();
+  }
 
-    els.dataTypeNameInput.value = "New Data";
-    els.dataTypeColorInput.value = "#000000";
-    els.dataTypeModal.classList.remove("hidden");
+  function openDataTypePicker() {
+    renderDataTypePickerList();
+    els.dataTypePickerModal.classList.remove("hidden");
+  }
+
+  function renderDataTypePickerList() {
+    els.dataTypePickerList.innerHTML = "";
+    const currentId = els.dataSelect.value;
+
+    dataTypes.forEach(dataType => {
+      const pointCount = points.filter(point => point.dataId === dataType.id).length;
+
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "dataTypePickerRow";
+      row.classList.toggle("activeDataType", dataType.id === currentId);
+
+      const swatch = document.createElement("span");
+      swatch.className = "dataTypePickerRowSwatch";
+      swatch.style.background = dataType.color || "#111";
+
+      const name = document.createElement("span");
+      name.className = "dataTypePickerRowName";
+      name.textContent = dataType.name;
+
+      const count = document.createElement("span");
+      count.className = "dataTypePickerRowCount";
+      count.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
+
+      row.appendChild(swatch);
+      row.appendChild(name);
+      row.appendChild(count);
+
+      row.addEventListener("click", () => {
+        els.dataSelect.value = dataType.id;
+        updateDataTypeSwatch();
+        scheduleAutoSave();
+        els.dataTypePickerModal.classList.add("hidden");
+      });
+
+      els.dataTypePickerList.appendChild(row);
+    });
   }
 
   function confirmDataType() {
