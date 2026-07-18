@@ -76,6 +76,7 @@ const App = (() => {
     els.projectModal = document.getElementById("projectModal");
     els.projectModalTitle = document.getElementById("projectModalTitle");
     els.projectNameInput = document.getElementById("projectNameInput");
+    els.projectSideModeChoices = Array.from(document.querySelectorAll('input[name="projectSideMode"]'));
     els.blankSizeFields = document.getElementById("blankSizeFields");
     els.blankWidthInput = document.getElementById("blankWidthInput");
     els.blankHeightInput = document.getElementById("blankHeightInput");
@@ -553,6 +554,7 @@ const App = (() => {
         : "Create Blank Drawing";
 
     els.projectNameInput.value = suggestedName;
+    els.projectSideModeChoices.forEach(choice => { choice.checked = choice.value === "compass"; });
 
     els.blankSizeFields.classList.toggle(
       "hidden",
@@ -594,12 +596,15 @@ const App = (() => {
     }
 
     const now = Date.now();
+    const selectedSideMode = els.projectSideModeChoices.find(choice => choice.checked);
+    const sideMode = selectedSideMode ? selectedSideMode.value : "compass";
 
     const project = {
       id: ProjectDB.makeId("project"),
       name,
       folderId: currentFolderId,
       kind: pendingProjectKind,
+      sideMode,
       createdAt: now,
       updatedAt: now,
 

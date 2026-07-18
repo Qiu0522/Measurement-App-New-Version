@@ -2216,7 +2216,7 @@ button {
   cursor: pointer;
 }
 
-.dataTypeSideModeField {
+.projectSideModeField {
   border: 1px solid var(--border);
   border-radius: 8px;
   margin: 0 0 14px;

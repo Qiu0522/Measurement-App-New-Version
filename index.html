@@ -393,6 +393,18 @@
         <input id="projectNameInput" type="text" placeholder="Level 11">
       </label>
 
+      <fieldset class="projectSideModeField">
+        <legend>Side Naming (applies to the whole work file)</legend>
+        <label class="radioChoice">
+          <input type="radio" name="projectSideMode" value="compass" checked>
+          <span>Compass (N/E/S/W) — building facades</span>
+        </label>
+        <label class="radioChoice">
+          <input type="radio" name="projectSideMode" value="flexible">
+          <span>Custom named sides — rooms/units, curved walls</span>
+        </label>
+      </fieldset>
+
       <div id="blankSizeFields" class="hidden">
         <div class="fieldRow">
           <label>
@@ -546,18 +558,6 @@
         Color
         <input id="dataTypeColorInput" type="color" value="#000000">
       </label>
-
-      <fieldset class="dataTypeSideModeField">
-        <legend>Side Naming</legend>
-        <label class="radioChoice">
-          <input type="radio" name="dataTypeSideMode" value="compass" checked>
-          <span>Compass (N/E/S/W) — building facades</span>
-        </label>
-        <label class="radioChoice">
-          <input type="radio" name="dataTypeSideMode" value="flexible">
-          <span>Custom named sides — rooms/units, curved walls</span>
-        </label>
-      </fieldset>
 
       <div class="modalActions">
         <button id="cancelDataTypeBtn" type="button">Cancel</button>

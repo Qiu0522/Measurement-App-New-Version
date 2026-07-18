@@ -227,7 +227,6 @@ const Workspace = (() => {
     els.dataTypeModal = document.getElementById("dataTypeModal");
     els.dataTypeNameInput = document.getElementById("dataTypeNameInput");
     els.dataTypeColorInput = document.getElementById("dataTypeColorInput");
-    els.dataTypeSideModeChoices = Array.from(document.querySelectorAll('input[name="dataTypeSideMode"]'));
     els.sideNameModal = document.getElementById("sideNameModal");
     els.sideNameInput = document.getElementById("sideNameInput");
     els.cancelSideNameBtn = document.getElementById("cancelSideNameBtn");
@@ -1182,7 +1181,6 @@ const Workspace = (() => {
   function resetDataTypeModalDefaults() {
     els.dataTypeNameInput.value = "New Data";
     els.dataTypeColorInput.value = "#000000";
-    els.dataTypeSideModeChoices.forEach(choice => { choice.checked = choice.value === "compass"; });
   }
 
   function confirmDataType() {
@@ -1193,9 +1191,7 @@ const Workspace = (() => {
       return;
     }
 
-    const selectedSideMode = els.dataTypeSideModeChoices.find(choice => choice.checked);
-    const sideMode = selectedSideMode ? selectedSideMode.value : "compass";
-
+    const sideMode = (project && project.sideMode === "flexible") ? "flexible" : "compass";
     const previousDataType = getDataType(els.dataSelect.value);
     const inheritSides = sideMode === "flexible" && previousDataType && previousDataType.sideMode === "flexible";
 
