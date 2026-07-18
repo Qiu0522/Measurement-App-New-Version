@@ -16,7 +16,6 @@ const Workspace = (() => {
   let pointMode = "lock";
   let dataTypeModalFromManage = false;
   let pendingDeleteDataTypeId = null;
-  let pendingSideNameDataTypeId = null;
   let commentTool = "none";
   let brushColor = "#ff0000";
   let brushWidth = 5;
@@ -173,14 +172,9 @@ const Workspace = (() => {
     els.autoSortSide = document.getElementById("autoSortSide");
     els.autoSortDirectionChoices = Array.from(document.querySelectorAll('input[name="autoSortDirection"]'));
     els.autoSortMethodChoices = Array.from(document.querySelectorAll('input[name="autoSortMethod"]'));
-    els.autoSortFlexibleDirectionChoices = Array.from(document.querySelectorAll('input[name="autoSortFlexibleDirection"]'));
-    els.autoSortCompassDirectionField = document.getElementById("autoSortCompassDirectionField");
-    els.autoSortFlexibleDirectionField = document.getElementById("autoSortFlexibleDirectionField");
     els.confirmAutoSortBtn = document.getElementById("confirmAutoSortBtn");
     els.cancelAutoSortBtn = document.getElementById("cancelAutoSortBtn");
     els.sideChoices = Array.from(document.querySelectorAll(".sideBtn"));
-    els.compassSideRow = document.getElementById("compassSideRow");
-    els.flexibleSideRow = document.getElementById("flexibleSideRow");
 
     els.setPositionModal = document.getElementById("setPositionModal");
     els.setPositionInfo = document.getElementById("setPositionInfo");
@@ -227,11 +221,6 @@ const Workspace = (() => {
     els.dataTypeModal = document.getElementById("dataTypeModal");
     els.dataTypeNameInput = document.getElementById("dataTypeNameInput");
     els.dataTypeColorInput = document.getElementById("dataTypeColorInput");
-    els.dataTypeSideModeChoices = Array.from(document.querySelectorAll('input[name="dataTypeSideMode"]'));
-    els.sideNameModal = document.getElementById("sideNameModal");
-    els.sideNameInput = document.getElementById("sideNameInput");
-    els.cancelSideNameBtn = document.getElementById("cancelSideNameBtn");
-    els.confirmSideNameBtn = document.getElementById("confirmSideNameBtn");
     els.cancelDataTypeBtn = document.getElementById("cancelDataTypeBtn");
     els.confirmDataTypeBtn = document.getElementById("confirmDataTypeBtn");
 
@@ -551,10 +540,6 @@ const Workspace = (() => {
     els.autoSortModal.addEventListener("click", event => {
       if (event.target === els.autoSortModal) closeAutoSortModal();
     });
-    els.autoSortDataType.addEventListener("change", populateAutoSortSideOptions);
-    els.autoSortMethodChoices.forEach(choice => {
-      choice.addEventListener("change", updateAutoSortDirectionFieldVisibility);
-    });
 
     // Set Position modal.
     els.confirmSetPositionBtn.addEventListener("click", confirmSetPosition);
@@ -680,7 +665,8 @@ const Workspace = (() => {
     els.addDataTypeFromManageBtn.addEventListener("click", () => {
       dataTypeModalFromManage = true;
       els.manageDataTypesModal.classList.add("hidden");
-      resetDataTypeModalDefaults();
+      els.dataTypeNameInput.value = "New Data";
+      els.dataTypeColorInput.value = "#000000";
       els.dataTypeModal.classList.remove("hidden");
     });
 
@@ -698,15 +684,6 @@ const Workspace = (() => {
       els.reassignDataTypeModal.classList.add("hidden");
       renderManageDataTypesList();
       els.manageDataTypesModal.classList.remove("hidden");
-    });
-
-    els.confirmSideNameBtn.addEventListener("click", confirmAddFlexibleSideTag);
-    els.cancelSideNameBtn.addEventListener("click", () => {
-      els.sideNameModal.classList.add("hidden");
-      pendingSideNameDataTypeId = null;
-    });
-    els.sideNameInput.addEventListener("keydown", event => {
-      if (event.key === "Enter") { event.preventDefault(); confirmAddFlexibleSideTag(); }
     });
 
 
@@ -1128,10 +1105,6 @@ const Workspace = (() => {
 
   function handleDataSelectChange() {
     updateDataTypeSwatch();
-    const dataType = getDataType(els.dataSelect.value);
-    if (dataType && dataType.sideMode === "flexible") {
-      setCurrentSide(dataType.lastSelectedSide || "");
-    }
     scheduleAutoSave();
   }
 
@@ -1179,12 +1152,6 @@ const Workspace = (() => {
     });
   }
 
-  function resetDataTypeModalDefaults() {
-    els.dataTypeNameInput.value = "New Data";
-    els.dataTypeColorInput.value = "#000000";
-    els.dataTypeSideModeChoices.forEach(choice => { choice.checked = choice.value === "compass"; });
-  }
-
   function confirmDataType() {
     const name = els.dataTypeNameInput.value.trim();
 
@@ -1193,12 +1160,6 @@ const Workspace = (() => {
       return;
     }
 
-    const selectedSideMode = els.dataTypeSideModeChoices.find(choice => choice.checked);
-    const sideMode = selectedSideMode ? selectedSideMode.value : "compass";
-
-    const previousDataType = getDataType(els.dataSelect.value);
-    const inheritSides = sideMode === "flexible" && previousDataType && previousDataType.sideMode === "flexible";
-
     const dataType = {
       id: "data_" + Date.now(),
       name,
@@ -1206,17 +1167,8 @@ const Workspace = (() => {
       counter: 1,
       export: true,
       ordered: false,
-      direction: "clockwise",
-      sideMode
+      direction: "clockwise"
     };
-
-    if (sideMode === "flexible") {
-      // Most rooms in the same building share the same wall layout, so a new
-      // room starts with the previous room's side tags already in place —
-      // the exception rooms can still add/remove tags by hand.
-      dataType.sideTags = inheritSides ? previousDataType.sideTags.slice() : [];
-      dataType.lastSelectedSide = inheritSides ? (previousDataType.lastSelectedSide || "") : "";
-    }
 
     dataTypes.push(dataType);
 
@@ -1382,39 +1334,18 @@ const Workspace = (() => {
       // pendingDeleteDataTypeId stays set — confirmDataType() checks it
       // and finishes the reassign-and-delete once the new type exists.
       els.reassignDataTypeModal.classList.add("hidden");
-      resetDataTypeModalDefaults();
+      els.dataTypeNameInput.value = "New Data";
+      els.dataTypeColorInput.value = "#000000";
       els.dataTypeModal.classList.remove("hidden");
     });
     els.reassignDataTypeList.appendChild(createRow);
   }
 
   function reassignPointsAndDeleteDataType(sourceId, destinationId) {
-    const destType = getDataType(destinationId);
-
     points.forEach(point => {
-      if (point.dataId !== sourceId) return;
-
-      const side = point.assignedSide || "";
-      if (destType && destType.sideMode === "flexible") {
-        // Carry the side tag forward so it still means something (and still
-        // gets ordered/exported) in the destination room.
-        if (side) {
-          if (!Array.isArray(destType.sideTags)) destType.sideTags = [];
-          if (!destType.sideTags.includes(side)) destType.sideTags.push(side);
-        }
-      } else if (side && !["N", "E", "S", "W"].includes(side)) {
-        // A custom side name doesn't mean anything on a compass-mode data
-        // type — clear it to "pending" rather than letting the point
-        // silently disappear from order labels and CSV export forever.
-        point.assignedSide = "";
-        point.assignedSeq = "";
-      }
-
-      point.dataId = destinationId;
+      if (point.dataId === sourceId) point.dataId = destinationId;
     });
-
     dataTypes = dataTypes.filter(dt => dt.id !== sourceId);
-    if (destType) recalculateDataTypeOrder(destinationId);
 
     renderDataSelect(els.dataSelect.value === sourceId ? destinationId : undefined);
     refreshAllPoints();
@@ -1740,13 +1671,10 @@ const Workspace = (() => {
 
     const dataType = getDataType(point.dataId);
     const measurement = point.measurement || String(point.number);
-    const isFlexible = !!(dataType && dataType.sideMode === "flexible");
 
     element.textContent =
       showOrderLabels && point.assignedSide && point.assignedSeq
-        ? (isFlexible
-            ? `${dataType.name}-${point.assignedSide}-${point.assignedSeq}`
-            : `${point.assignedSide}${point.assignedSeq}`)
+        ? `${point.assignedSide}${point.assignedSeq}`
         : measurement;
 
     element.style.left = point.x + "px";
@@ -1760,11 +1688,6 @@ const Workspace = (() => {
   function editPoint(point) {
     const oldValue = point.measurement;
     const oldSide = point.assignedSide || "";
-
-    // Points from every data type render together on the same canvas, so
-    // editing one must switch the active data type to ITS type first —
-    // otherwise the side panel below would show the wrong data type's sides.
-    renderDataSelect(point.dataId);
 
     // Editing a point starts from that point's own side. The operator can
     // change it on the keypad and the new side is saved together with value.
@@ -2027,6 +1950,7 @@ const Workspace = (() => {
     manual order; adding/moving a point, assigning a side, or ordering again
     returns safely to the v6.2 geometric result.
   */
+  const SIDE_ORDER = ["N", "E", "S", "W", ""];
 
   function isSideLocked(dataType, side) {
     return !!(dataType &&
@@ -2060,10 +1984,8 @@ const Workspace = (() => {
 
   function getOrderedPoints(dataId) {
     const result = [];
-    const dataType = getDataType(dataId);
-    const sides = sidesForDataType(dataType).concat([""]);
 
-    sides.forEach(side => {
+    SIDE_ORDER.forEach(side => {
       orderedSidePoints(dataId, side).forEach((point, index) => {
         result.push({ point, side, seq: index + 1 });
       });
@@ -2094,15 +2016,6 @@ const Workspace = (() => {
 
     if (method === "angle") {
       sorted = sortPointsByAngle(pointsInSide(dataId, side), clockwise);
-    } else if (dataType.sideMode === "flexible") {
-      // No compass letter to infer an axis from — the direction here is
-      // one of lr/rl/tb/bt, chosen directly by whoever knows which way
-      // this particular side was actually walked/measured.
-      sorted = pointsInSide(dataId, side).slice();
-      if (direction === "rl") sorted.sort((a, b) => b.x - a.x);
-      else if (direction === "tb") sorted.sort((a, b) => a.y - b.y);
-      else if (direction === "bt") sorted.sort((a, b) => b.y - a.y);
-      else sorted.sort((a, b) => a.x - b.x); // "lr" default
     } else {
       sorted = pointsInSide(dataId, side).slice();
 
@@ -2457,8 +2370,9 @@ const Workspace = (() => {
     if (selectedDataId === "__all__" || (selectedDataId && getDataType(selectedDataId))) {
       els.autoSortDataType.value = selectedDataId;
     }
-
-    populateAutoSortSideOptions();
+    els.autoSortSide.value = ["__all__", "N", "E", "S", "W"].includes(lastAutoSortSide)
+      ? lastAutoSortSide
+      : "__all__";
 
     els.autoSortDirectionChoices.forEach(choice => {
       choice.checked = choice.value === lastAutoSortDirection;
@@ -2468,68 +2382,7 @@ const Workspace = (() => {
       choice.checked = choice.value === lastAutoSortMethod;
     });
 
-    updateAutoSortDirectionFieldVisibility();
-
     els.autoSortModal.classList.remove("hidden");
-  }
-
-  function sidesForDataType(dataType) {
-    if (!dataType) return [];
-    return dataType.sideMode === "flexible" ? (dataType.sideTags || []).slice() : ["N", "E", "S", "W"];
-  }
-
-  function populateAutoSortSideOptions() {
-    const dataSelection = els.autoSortDataType.value;
-    const previousSide = els.autoSortSide.value;
-    const dataType = dataSelection === "__all__" ? null : getDataType(dataSelection);
-
-    els.autoSortSide.innerHTML = "";
-    const allOption = document.createElement("option");
-    allOption.value = "__all__";
-    allOption.textContent = "All Sides";
-    els.autoSortSide.appendChild(allOption);
-
-    // "All Data Types" can't offer specific side letters/tags that make
-    // sense across every type at once, so it only offers "All Sides" —
-    // confirmAutoSort() resolves that per data type automatically.
-    const sides = dataSelection === "__all__" ? [] : sidesForDataType(dataType);
-    sides.forEach(side => {
-      const option = document.createElement("option");
-      option.value = side;
-      option.textContent = side;
-      els.autoSortSide.appendChild(option);
-    });
-
-    els.autoSortSide.value = sides.includes(previousSide) || previousSide === "__all__"
-      ? (sides.includes(previousSide) ? previousSide : "__all__")
-      : "__all__";
-
-    updateAutoSortDirectionFieldVisibility();
-  }
-
-  function updateAutoSortDirectionFieldVisibility() {
-    if (!els.autoSortCompassDirectionField || !els.autoSortFlexibleDirectionField) return;
-
-    const selectedMethod = els.autoSortMethodChoices.find(choice => choice.checked);
-    const method = selectedMethod ? selectedMethod.value : "position";
-
-    if (method === "angle") {
-      els.autoSortCompassDirectionField.classList.remove("hidden");
-      els.autoSortFlexibleDirectionField.classList.add("hidden");
-      return;
-    }
-
-    // Position method: which direction field is relevant depends on the
-    // selected data type's mode. "All Data Types" shows both, since the
-    // batch might contain a mix — confirmAutoSort() picks the right one
-    // per target automatically either way.
-    const dataSelection = els.autoSortDataType.value;
-    const dataType = dataSelection === "__all__" ? null : getDataType(dataSelection);
-    const showFlexible = !dataType || dataType.sideMode === "flexible";
-    const showCompass = !dataType || dataType.sideMode !== "flexible";
-
-    els.autoSortCompassDirectionField.classList.toggle("hidden", !showCompass);
-    els.autoSortFlexibleDirectionField.classList.toggle("hidden", !showFlexible);
   }
 
   function closeAutoSortModal() {
@@ -2541,37 +2394,19 @@ const Workspace = (() => {
     const sideSelection = els.autoSortSide.value;
     const selectedDirection = els.autoSortDirectionChoices.find(choice => choice.checked);
     const direction = selectedDirection ? selectedDirection.value : "clockwise";
-    const selectedFlexibleDirection = els.autoSortFlexibleDirectionChoices
-      ? els.autoSortFlexibleDirectionChoices.find(choice => choice.checked)
-      : null;
-    const flexibleDirection = selectedFlexibleDirection ? selectedFlexibleDirection.value : "lr";
     const selectedMethod = els.autoSortMethodChoices.find(choice => choice.checked);
     const method = selectedMethod ? selectedMethod.value : "position";
     const targetDataTypes = dataSelection === "__all__" ? dataTypes.slice() : [getDataType(dataSelection)].filter(Boolean);
+    const targetSides = sideSelection === "__all__" ? ["N", "E", "S", "W"] : [sideSelection];
     if (!targetDataTypes.length) { setStatus("Choose a valid data type."); return; }
-
     const targets = [];
-    targetDataTypes.forEach(dt => {
-      const targetSides = sideSelection === "__all__" ? sidesForDataType(dt) : [sideSelection];
-      targetSides.forEach(side => { if (pointsInSide(dt.id, side).length) targets.push({ dt, side }); });
-    });
+    targetDataTypes.forEach(dt => targetSides.forEach(side => { if (pointsInSide(dt.id, side).length) targets.push({dt, side}); }));
     if (!targets.length) { setStatus("No matching assigned points to sort."); return; }
-
     closeAutoSortModal();
     setStatus("Sorting…");
     lastAutoSortDataId = dataSelection; lastAutoSortSide = sideSelection; lastAutoSortDirection = direction; lastAutoSortMethod = method;
     const before = {}; targetDataTypes.forEach(dt => { before[dt.id] = snapshotOrder(dt.id); });
-
-    targets.forEach(({ dt, side }) => {
-      if (method === "angle") {
-        autoSortSide(dt.id, side, direction, "angle");
-      } else if (dt.sideMode === "flexible") {
-        autoSortSide(dt.id, side, flexibleDirection, "position");
-      } else {
-        autoSortSide(dt.id, side, direction, "position");
-      }
-    });
-
+    targets.forEach(({dt, side}) => autoSortSide(dt.id, side, direction, method));
     targetDataTypes.forEach(dt => { dt.direction = direction; recalculateDataTypeOrder(dt.id); });
     const after = {}; targetDataTypes.forEach(dt => { after[dt.id] = snapshotOrder(dt.id); });
     pushUndo({ type: "reorderBatch", before, after });
@@ -2579,7 +2414,7 @@ const Workspace = (() => {
     const typeLabel = dataSelection === "__all__" ? "all data types" : targetDataTypes[0].name;
     const sideLabel = sideSelection === "__all__" ? "all sides" : sideSelection;
     const methodLabel = method === "angle" ? "by angle" : "by position";
-    setStatus(`Auto-sorted ${typeLabel} · ${sideLabel} · ${methodLabel}.`);
+    setStatus(`Auto-sorted ${typeLabel} · ${sideLabel} · ${methodLabel} · ${direction === "clockwise" ? "clockwise" : "counterclockwise"}.`);
     scheduleAutoSave();
   }
 
@@ -2694,104 +2529,6 @@ const Workspace = (() => {
         button.classList.toggle("activeSide", (button.dataset.side || "") === currentSide);
       });
     }
-
-    const dataType = getDataType(els.dataSelect.value);
-    if (dataType && dataType.sideMode === "flexible") {
-      dataType.lastSelectedSide = currentSide;
-      if (els.flexibleSideRow) {
-        els.flexibleSideRow.querySelectorAll(".sideTag").forEach(tag => {
-          tag.classList.toggle("activeSide", tag.dataset.side === currentSide);
-        });
-      }
-    }
-  }
-
-  function renderSidePanelForCurrentDataType() {
-    const dataType = getDataType(els.dataSelect.value);
-    const isFlexible = !!(dataType && dataType.sideMode === "flexible");
-
-    if (els.compassSideRow) els.compassSideRow.classList.toggle("hidden", isFlexible);
-    if (els.flexibleSideRow) els.flexibleSideRow.classList.toggle("hidden", !isFlexible);
-
-    if (!isFlexible) return;
-
-    els.flexibleSideRow.innerHTML = "";
-
-    (dataType.sideTags || []).forEach(side => {
-      const tag = document.createElement("button");
-      tag.type = "button";
-      tag.className = "sideTag" + (side === currentSide ? " activeSide" : "");
-      tag.dataset.side = side;
-
-      const label = document.createElement("span");
-      label.textContent = side;
-      tag.appendChild(label);
-
-      const removeBtn = document.createElement("span");
-      removeBtn.className = "sideTagRemove";
-      removeBtn.textContent = "×";
-      removeBtn.title = "Delete this side";
-      removeBtn.addEventListener("click", event => {
-        event.stopPropagation();
-        removeFlexibleSideTag(dataType, side);
-      });
-      tag.appendChild(removeBtn);
-
-      tag.addEventListener("click", () => setCurrentSide(side));
-      els.flexibleSideRow.appendChild(tag);
-    });
-
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.className = "sideTagAdd";
-    addBtn.textContent = "+ 新的面";
-    addBtn.addEventListener("click", () => openAddFlexibleSideTag(dataType));
-    els.flexibleSideRow.appendChild(addBtn);
-  }
-
-  function openAddFlexibleSideTag(dataType) {
-    els.sideNameInput.value = "";
-    pendingSideNameDataTypeId = dataType.id;
-    els.sideNameModal.classList.remove("hidden");
-    els.sideNameInput.focus();
-  }
-
-  function confirmAddFlexibleSideTag() {
-    const dataType = getDataType(pendingSideNameDataTypeId);
-    const name = els.sideNameInput.value.trim();
-    els.sideNameModal.classList.add("hidden");
-    pendingSideNameDataTypeId = null;
-    if (!dataType || !name) return;
-
-    if (!Array.isArray(dataType.sideTags)) dataType.sideTags = [];
-    if (!dataType.sideTags.includes(name)) dataType.sideTags.push(name);
-
-    renderSidePanelForCurrentDataType();
-    setCurrentSide(name);
-    scheduleAutoSave();
-  }
-
-  function removeFlexibleSideTag(dataType, side) {
-    const count = points.filter(p => p.dataId === dataType.id && p.assignedSide === side).length;
-
-    const message = count
-      ? `"${side}" 这个面在 "${dataType.name}" 里有 ${count} 个点。删除这个面会把这 ${count} 个点也一起永久删除，这个操作不能撤销。确定删除吗？`
-      : `删除 "${side}" 这个面？（这个房间里这一面还没有点）`;
-
-    if (!confirm(message)) return;
-
-    points.forEach(point => {
-      if (point.dataId === dataType.id && point.assignedSide === side) removePointElement(point.uid);
-    });
-    points = points.filter(p => !(p.dataId === dataType.id && p.assignedSide === side));
-    dataType.sideTags = (dataType.sideTags || []).filter(s => s !== side);
-    if (dataType.lastSelectedSide === side) dataType.lastSelectedSide = "";
-    if (currentSide === side) currentSide = "";
-
-    renderSidePanelForCurrentDataType();
-    refreshAllPoints();
-    updateNoSideBanner();
-    scheduleAutoSave();
   }
 
   function noSidePoints() {
@@ -2938,7 +2675,6 @@ const Workspace = (() => {
     els.measurementTitle.textContent = title;
     measurementCallback = callback;
     hideMeasurementError();
-    renderSidePanelForCurrentDataType();
     els.measurementModal.classList.remove("hidden");
     const activeType = getDataType(els.dataSelect.value);
     if (els.missingValueBtn) els.missingValueBtn.style.setProperty("--missing-color", activeType?.color || "#1f6feb");
@@ -2958,12 +2694,6 @@ const Workspace = (() => {
       showMeasurementError(
         "Check the format. Examples: 26, 26 3/8, -12 1/2, 3/16."
       );
-      return;
-    }
-
-    const activeDataType = getDataType(els.dataSelect.value);
-    if (activeDataType && activeDataType.sideMode === "flexible" && !currentSide) {
-      showMeasurementError("Select or create a side first.");
       return;
     }
 
@@ -3960,13 +3690,10 @@ const Workspace = (() => {
         if (dataType?.export === false) return;
 
         const measurement = point.measurement || String(point.number);
-        const isFlexible = !!(dataType && dataType.sideMode === "flexible");
 
         const label =
           showOrderLabels && point.assignedSide && point.assignedSeq
-            ? (isFlexible
-                ? `${dataType.name}-${point.assignedSide}-${point.assignedSeq}`
-                : `${point.assignedSide}${point.assignedSeq}`)
+            ? `${point.assignedSide}${point.assignedSeq}`
             : measurement;
 
         // White outline first, then the coloured text on top.
