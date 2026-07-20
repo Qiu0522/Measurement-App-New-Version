@@ -2244,3 +2244,33 @@ button {
 .pickerSection .dataTypePickerList {
   max-height: 22vh;
 }
+
+/* ---------- Auto Sort: multi-select side checkboxes (area mode) ---------- */
+.autoSortSidesField {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+}
+
+.autoSortSidesField legend {
+  font-weight: 700;
+}
+
+.autoSortSidesField .radioRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.autoSortSidesField .radioChoice {
+  min-width: 60px;
+  justify-content: center;
+}
+
+.hint {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.4;
+}

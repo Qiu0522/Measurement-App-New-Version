@@ -183,6 +183,9 @@ const Workspace = (() => {
     els.autoSortDataType = document.getElementById("autoSortDataType");
     els.autoSortDataTypeLabel = document.getElementById("autoSortDataTypeLabel");
     els.autoSortSide = document.getElementById("autoSortSide");
+    els.autoSortSideDropdownField = document.getElementById("autoSortSideDropdownField");
+    els.autoSortSidesField = document.getElementById("autoSortSidesField");
+    els.autoSortSidesList = document.getElementById("autoSortSidesList");
     els.autoSortDirectionChoices = Array.from(document.querySelectorAll('input[name="autoSortDirection"]'));
     els.autoSortMethodChoices = Array.from(document.querySelectorAll('input[name="autoSortMethod"]'));
     els.autoSortFlexibleDirectionChoices = Array.from(document.querySelectorAll('input[name="autoSortFlexibleDirection"]'));
@@ -591,7 +594,10 @@ const Workspace = (() => {
     els.autoSortModal.addEventListener("click", event => {
       if (event.target === els.autoSortModal) closeAutoSortModal();
     });
-    els.autoSortDataType.addEventListener("change", populateAutoSortSideOptions);
+    els.autoSortDataType.addEventListener("change", () => {
+      if (isAreaProject()) populateAreaAutoSortSideOptions();
+      else populateAutoSortSideOptions();
+    });
     els.autoSortMethodChoices.forEach(choice => {
       choice.addEventListener("change", updateAutoSortDirectionFieldVisibility);
     });
@@ -3013,6 +3019,8 @@ const Workspace = (() => {
     });
 
     if (els.autoSortFlexibleDirectionField) els.autoSortFlexibleDirectionField.classList.add("hidden");
+    if (els.autoSortSideDropdownField) els.autoSortSideDropdownField.classList.remove("hidden");
+    if (els.autoSortSidesField) els.autoSortSidesField.classList.add("hidden");
     updateAutoSortDirectionFieldVisibility();
 
     els.autoSortModal.classList.remove("hidden");
@@ -3135,6 +3143,8 @@ const Workspace = (() => {
       els.autoSortDataType.value = selectedAreaId;
     }
 
+    if (els.autoSortSideDropdownField) els.autoSortSideDropdownField.classList.add("hidden");
+    if (els.autoSortSidesField) els.autoSortSidesField.classList.remove("hidden");
     populateAreaAutoSortSideOptions();
 
     els.autoSortMethodChoices.forEach(choice => {
@@ -3153,29 +3163,41 @@ const Workspace = (() => {
 
   function populateAreaAutoSortSideOptions() {
     const area = getArea(els.autoSortDataType.value);
-    const previousSide = els.autoSortSide.value;
+    const previouslyChecked = new Set(
+      Array.from(els.autoSortSidesList.querySelectorAll("input:checked")).map(cb => cb.value)
+    );
 
-    els.autoSortSide.innerHTML = "";
-    const allOption = document.createElement("option");
-    allOption.value = "__all__";
-    allOption.textContent = "All Sides";
-    els.autoSortSide.appendChild(allOption);
-
+    els.autoSortSidesList.innerHTML = "";
     const sides = sidesForArea(area);
-    sides.forEach(side => {
-      const option = document.createElement("option");
-      option.value = side;
-      option.textContent = side;
-      els.autoSortSide.appendChild(option);
-    });
 
-    els.autoSortSide.value = sides.includes(previousSide) ? previousSide : "__all__";
+    if (!sides.length) {
+      els.autoSortSidesList.innerHTML = '<span class="hint">This area has no sides yet.</span>';
+      return;
+    }
+
+    sides.forEach(side => {
+      const label = document.createElement("label");
+      label.className = "radioChoice";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = side;
+      // Default: whichever side was checked last time, or (first time) this
+      // area's currently-active side — same behaviour as the prototype.
+      checkbox.checked = previouslyChecked.size
+        ? previouslyChecked.has(side)
+        : side === (area && area.lastSelectedSide);
+      const span = document.createElement("span");
+      span.textContent = side;
+      label.appendChild(checkbox);
+      label.appendChild(span);
+      els.autoSortSidesList.appendChild(label);
+    });
   }
 
   function confirmAreaAutoSort() {
     const areaId = els.autoSortDataType.value;
     const area = getArea(areaId);
-    const sideSelection = els.autoSortSide.value;
+    const targetSides = Array.from(els.autoSortSidesList.querySelectorAll("input:checked")).map(cb => cb.value);
     const selectedMethod = els.autoSortMethodChoices.find(choice => choice.checked);
     const method = selectedMethod ? selectedMethod.value : "position";
     const selectedFlexibleDirection = els.autoSortFlexibleDirectionChoices.find(choice => choice.checked);
@@ -3184,8 +3206,8 @@ const Workspace = (() => {
     const direction = selectedDirection ? selectedDirection.value : "clockwise";
 
     if (!area) { setStatus("Choose a valid area."); return; }
+    if (!targetSides.length) { setStatus("Choose at least one side to sort."); return; }
 
-    const targetSides = sideSelection === "__all__" ? sidesForArea(area) : [sideSelection];
     const sidesWithPoints = targetSides.filter(side => pointsInAreaSide(area.id, side).length);
     if (!sidesWithPoints.length) { setStatus("No matching assigned points to sort."); return; }
 
@@ -3205,7 +3227,7 @@ const Workspace = (() => {
     pushUndo({ type: "reorderAreaBatch", areaId: area.id, before, after });
 
     refreshAllPoints();
-    const sideLabel = sideSelection === "__all__" ? "all sides" : sideSelection;
+    const sideLabel = targetSides.join(", ");
     const methodLabel = method === "angle" ? "by angle" : "by position";
     setStatus(`Auto-sorted "${area.name}" · ${sideLabel} · ${methodLabel}.`);
     scheduleAutoSave();

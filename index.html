@@ -265,10 +265,15 @@
         <select id="autoSortDataType"></select>
       </label>
 
-      <label>
+      <label id="autoSortSideDropdownField">
         Side
         <select id="autoSortSide"></select>
       </label>
+
+      <fieldset class="autoSortSidesField hidden" id="autoSortSidesField">
+        <legend>应用到哪些面（可多选）</legend>
+        <div id="autoSortSidesList" class="radioRow"></div>
+      </fieldset>
 
       <fieldset class="autoSortMethod">
         <legend>Sort Method</legend>
