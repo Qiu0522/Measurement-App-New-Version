@@ -7,8 +7,6 @@ const App = (() => {
   let currentFolderId = null;
   let currentMenuItem = null;
   let pendingRename = null;
-  let moveTargetItem = null;
-  let moveModalFolderId = null;
 
   let pendingProjectKind = null;
   let pendingPdfData = null;
@@ -52,7 +50,6 @@ const App = (() => {
     els.libraryContextMenu = document.getElementById("libraryContextMenu");
     els.renameLibraryAction = document.getElementById("renameLibraryAction");
     els.duplicateLibraryAction = document.getElementById("duplicateLibraryAction");
-    els.moveLibraryAction = document.getElementById("moveLibraryAction");
     els.deleteLibraryAction = document.getElementById("deleteLibraryAction");
     els.exportFileAction = document.getElementById("exportFileAction");
     els.importFileBtn = document.getElementById("importFileBtn");
@@ -71,13 +68,6 @@ const App = (() => {
     els.cancelRenameBtn = document.getElementById("cancelRenameBtn");
     els.confirmRenameBtn = document.getElementById("confirmRenameBtn");
 
-    els.moveModal = document.getElementById("moveModal");
-    els.moveModalPath = document.getElementById("moveModalPath");
-    els.moveModalList = document.getElementById("moveModalList");
-    els.moveUpFolderBtn = document.getElementById("moveUpFolderBtn");
-    els.cancelMoveBtn = document.getElementById("cancelMoveBtn");
-    els.confirmMoveHereBtn = document.getElementById("confirmMoveHereBtn");
-
     els.folderModal = document.getElementById("folderModal");
     els.folderNameInput = document.getElementById("folderNameInput");
     els.cancelFolderModal = document.getElementById("cancelFolderModal");
@@ -86,6 +76,7 @@ const App = (() => {
     els.projectModal = document.getElementById("projectModal");
     els.projectModalTitle = document.getElementById("projectModalTitle");
     els.projectNameInput = document.getElementById("projectNameInput");
+    els.projectSideModeChoices = Array.from(document.querySelectorAll('input[name="projectSideMode"]'));
     els.blankSizeFields = document.getElementById("blankSizeFields");
     els.blankWidthInput = document.getElementById("blankWidthInput");
     els.blankHeightInput = document.getElementById("blankHeightInput");
@@ -163,7 +154,6 @@ const App = (() => {
 
     els.renameLibraryAction.addEventListener("click", renameSelectedItem);
     els.duplicateLibraryAction.addEventListener("click", duplicateSelectedItem);
-    els.moveLibraryAction.addEventListener("click", moveSelectedItem);
     els.deleteLibraryAction.addEventListener("click", deleteSelectedItem);
 
     els.exportFileAction.addEventListener("click", exportSelectedFile);
@@ -190,10 +180,6 @@ const App = (() => {
         confirmRename();
       }
     });
-
-    els.cancelMoveBtn.addEventListener("click", closeMoveModal);
-    els.confirmMoveHereBtn.addEventListener("click", confirmMoveHere);
-    els.moveUpFolderBtn.addEventListener("click", moveUpInModal);
 
     document.addEventListener("click", event => {
       if (!els.newProjectMenu.contains(event.target)) {
@@ -447,7 +433,7 @@ const App = (() => {
         event.clientX,
         event.clientY,
         200,
-        item.type === "folder" ? 140 : 185
+        item.type === "folder" ? 100 : 145
       );
     });
 
@@ -568,6 +554,7 @@ const App = (() => {
         : "Create Blank Drawing";
 
     els.projectNameInput.value = suggestedName;
+    els.projectSideModeChoices.forEach(choice => { choice.checked = choice.value === "compass"; });
 
     els.blankSizeFields.classList.toggle(
       "hidden",
@@ -609,12 +596,15 @@ const App = (() => {
     }
 
     const now = Date.now();
+    const selectedSideMode = els.projectSideModeChoices.find(choice => choice.checked);
+    const sideMode = selectedSideMode ? selectedSideMode.value : "compass";
 
     const project = {
       id: ProjectDB.makeId("project"),
       name,
       folderId: currentFolderId,
       kind: pendingProjectKind,
+      sideMode,
       createdAt: now,
       updatedAt: now,
 
@@ -736,148 +726,6 @@ const App = (() => {
   function closeRenameModal() {
     pendingRename = null;
     els.renameModal.classList.add("hidden");
-  }
-
-  function getFolderDescendantIds(folderId) {
-    const result = new Set();
-    const stack = [folderId];
-
-    while (stack.length) {
-      const id = stack.pop();
-      folders
-        .filter(folder => folder.parentId === id)
-        .forEach(folder => {
-          if (!result.has(folder.id)) {
-            result.add(folder.id);
-            stack.push(folder.id);
-          }
-        });
-    }
-
-    return result;
-  }
-
-  function moveSelectedItem() {
-    hideMenus();
-    if (!currentMenuItem) return;
-
-    const record = currentMenuItem.type === "folder"
-      ? folders.find(item => item.id === currentMenuItem.id)
-      : projects.find(item => item.id === currentMenuItem.id);
-    if (!record) return;
-
-    moveTargetItem = { type: currentMenuItem.type, id: currentMenuItem.id };
-    moveModalFolderId = currentMenuItem.type === "folder"
-      ? (record.parentId || null)
-      : (record.folderId || null);
-
-    renderMoveModal();
-    els.moveModal.classList.remove("hidden");
-  }
-
-  function closeMoveModal() {
-    moveTargetItem = null;
-    els.moveModal.classList.add("hidden");
-  }
-
-  function renderMoveModal() {
-    if (!moveTargetItem) return;
-
-    // A folder can never be moved into itself or one of its own subfolders.
-    const forbidden = moveTargetItem.type === "folder"
-      ? new Set([moveTargetItem.id, ...getFolderDescendantIds(moveTargetItem.id)])
-      : new Set();
-
-    if (forbidden.has(moveModalFolderId)) {
-      moveModalFolderId = null;
-    }
-
-    const path = [];
-    let id = moveModalFolderId;
-    while (id) {
-      const folder = folders.find(item => item.id === id);
-      if (!folder) break;
-      path.unshift(folder);
-      id = folder.parentId || null;
-    }
-
-    els.moveModalPath.textContent =
-      "Library" + path.map(folder => " / " + folder.name).join("");
-    els.moveUpFolderBtn.disabled = !moveModalFolderId;
-
-    els.moveModalList.innerHTML = "";
-
-    const subfolders = folders
-      .filter(folder => (folder.parentId || null) === moveModalFolderId)
-      .filter(folder => !forbidden.has(folder.id));
-
-    if (!subfolders.length) {
-      const empty = document.createElement("p");
-      empty.className = "moveModalEmpty";
-      empty.textContent = "No subfolders here.";
-      els.moveModalList.appendChild(empty);
-      return;
-    }
-
-    subfolders.forEach(folder => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "moveModalRow";
-      row.textContent = "📁 " + folder.name;
-      row.addEventListener("click", () => {
-        moveModalFolderId = folder.id;
-        renderMoveModal();
-      });
-      els.moveModalList.appendChild(row);
-    });
-  }
-
-  function moveUpInModal() {
-    if (!moveModalFolderId) return;
-    const folder = folders.find(item => item.id === moveModalFolderId);
-    moveModalFolderId = folder?.parentId || null;
-    renderMoveModal();
-  }
-
-  async function confirmMoveHere() {
-    if (!moveTargetItem) return;
-
-    try {
-      if (moveTargetItem.type === "folder") {
-        const folder = folders.find(item => item.id === moveTargetItem.id);
-        if (!folder) { closeMoveModal(); return; }
-
-        if (findSiblingByName("folder", folder.name, moveModalFolderId, folder.id)) {
-          alert(`A folder named "${folder.name}" already exists there. Rename it first.`);
-          return;
-        }
-
-        folder.parentId = moveModalFolderId;
-        await ProjectDB.saveFolder(folder);
-      } else {
-        const project = projects.find(item => item.id === moveTargetItem.id);
-        if (!project) { closeMoveModal(); return; }
-
-        const duplicate = findSiblingByName("project", project.name, moveModalFolderId, project.id);
-        if (duplicate) {
-          const replace = confirm(
-            `A work file named "${project.name}" already exists there.\n\n` +
-            "OK = Replace it (the old file is deleted)\n" +
-            "Cancel = keep this file where it is"
-          );
-          if (!replace) return;
-          await ProjectDB.deleteProject(duplicate.id);
-        }
-
-        project.folderId = moveModalFolderId;
-        await ProjectDB.saveProject(project);
-      }
-
-      closeMoveModal();
-      await refreshLibrary();
-    } catch (error) {
-      alert("Move failed: " + explainDbError(error));
-    }
   }
 
   async function exportSelectedFile() {
