@@ -1,7 +1,7 @@
 "use strict";
 
 const ProjectDB = (() => {
-  const DB_NAME = "FieldMeasurementV4";
+  const DB_NAME = "FieldMeasurementV4_new";
   const DB_VERSION = 2;
 
   const PROJECTS = "projects";
