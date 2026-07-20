@@ -762,8 +762,28 @@ const App = (() => {
       return;
     }
 
+    // Older/lighter "export measurement data" files carry the points and
+    // data types directly, with no "format" tag — recognize that shape and
+    // rebuild a full, editable project from it.
+    const isMeasurementDataExport =
+      data && typeof data.project === "string" && Array.isArray(data.dataTypes);
+
+    if (isMeasurementDataExport) {
+      try {
+        const imported = await importMeasurementDataExport(data, currentFolderId);
+        await refreshLibrary();
+        alert(`Imported "${imported.name}" into this folder as a new, editable work file.`);
+      } catch (error) {
+        alert("Import failed: " + explainDbError(error));
+      }
+      return;
+    }
+
     if (!data || !["field-measurement-file", "field-measurement-files"].includes(data.format)) {
-      alert("That is not a single-file export. For a whole-library backup file, use Restore instead.");
+      alert(
+        "That file isn't a format Import File recognizes.\n\n" +
+        "For a whole-library backup file, use Restore instead."
+      );
       return;
     }
 
@@ -781,6 +801,90 @@ const App = (() => {
     } catch (error) {
       alert("Import failed: " + explainDbError(error));
     }
+  }
+
+  /*
+    Rebuilds a full, editable work file from a "measurement data export" —
+    the lighter export that only carries data types + points (id, name,
+    color, and each point's side/seq/measurement/x/y/warning), with no
+    background PDF/image and no "format" tag. The order each point had
+    (its "seq" within its side) is preserved exactly via manualSeq, and
+    that side is marked "locked" so it displays in the same order
+    immediately, without needing to re-run Auto Sort.
+  */
+  async function importMeasurementDataExport(data, folderId) {
+    const dataTypes = [];
+    const points = [];
+    let maxX = 0;
+    let maxY = 0;
+
+    (data.dataTypes || []).forEach((sourceType, typeIndex) => {
+      const dataId = sourceType.id || ProjectDB.makeId("data");
+      const sidesSeen = new Set();
+      let pointCount = 0;
+
+      (sourceType.points || []).forEach((sourcePoint, pointIndex) => {
+        const side = sourcePoint.side || "";
+        const x = Number(sourcePoint.x) || 0;
+        const y = Number(sourcePoint.y) || 0;
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        if (side) sidesSeen.add(side);
+        pointCount += 1;
+
+        points.push({
+          uid: "point_" + Date.now() + "_" + typeIndex + "_" + pointIndex + "_" + Math.random().toString(16).slice(2),
+          dataId,
+          number: pointIndex + 1,
+          x, y,
+          measurement: sourcePoint.measurement || "",
+          moved: false,
+          moveDistance: 0,
+          excluded: false,
+          assignedSide: side,
+          assignedSeq: sourcePoint.seq || "",
+          manualSeq: sourcePoint.seq || pointIndex + 1
+        });
+      });
+
+      dataTypes.push({
+        id: dataId,
+        name: sourceType.name || `Data ${typeIndex + 1}`,
+        color: sourceType.color || "#000000",
+        counter: pointCount + 1,
+        export: true,
+        ordered: true,
+        direction: "clockwise",
+        lockedSides: Array.from(sidesSeen)
+      });
+    });
+
+    const now = Date.now();
+    const project = {
+      id: ProjectDB.makeId("project"),
+      name: (data.project || "Recovered file") + " (recovered)",
+      folderId: folderId || null,
+      kind: "blank",
+      sideMode: "compass",
+      createdAt: now,
+      updatedAt: now,
+      blankWidth: Math.max(2400, Math.ceil(maxX) + 400),
+      blankHeight: Math.max(1600, Math.ceil(maxY) + 400),
+      state: {
+        points,
+        dataTypes,
+        selectedDataId: dataTypes[0] ? dataTypes[0].id : null,
+        pointMode: "lock",
+        showOrderLabels: false,
+        zoomLevel: 1,
+        commentImageData: "",
+        scrollLeft: 0,
+        scrollTop: 0
+      }
+    };
+
+    await ProjectDB.saveProject(project);
+    return project;
   }
 
   function updateBackupStatus() {
@@ -888,7 +992,10 @@ const App = (() => {
     }
 
     if (!backup || backup.format !== "field-measurement-backup" || !backup.data) {
-      alert("That file is not a Field Measurement backup.");
+      alert(
+        "That file is not a Field Measurement backup.\n\n" +
+        "For a single work file export, use Import File instead."
+      );
       return;
     }
 
