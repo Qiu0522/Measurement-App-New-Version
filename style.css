@@ -2222,3 +2222,25 @@ button {
   margin: 0 0 14px;
   padding: 8px 10px;
 }
+
+/* ---------- Combined Area + Data Type picker (area-mode projects) ---------- */
+.areaDataTypePickerCard {
+  width: min(520px, 96vw);
+}
+
+.pickerSection {
+  margin-bottom: 14px;
+}
+
+.pickerSectionLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+
+.pickerSection .dataTypePickerList {
+  max-height: 22vh;
+}
