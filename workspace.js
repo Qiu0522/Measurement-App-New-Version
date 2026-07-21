@@ -9,7 +9,7 @@ const Workspace = (() => {
   ];
 
   const DEFAULT_AREAS = [
-    { id: "area1", name: "Area 1", sideTags: [], lastSelectedSide: "", lockedSides: [] }
+    { id: "area1", name: "Area 1", sideTags: ["1"], lastSelectedSide: "1", lockedSides: [] }
   ];
 
   let project = null;
@@ -123,6 +123,7 @@ const Workspace = (() => {
 
     els.dataSelect = document.getElementById("dataSelect");
     els.addBtn = document.getElementById("addBtn");
+    els.newSegmentBtn = document.getElementById("newSegmentBtn");
     els.lockBtn = document.getElementById("lockBtn");
     els.textBtn = document.getElementById("textBtn");
     els.markupMenu = document.getElementById("markupMenu");
@@ -294,6 +295,7 @@ const Workspace = (() => {
     els.pickerAreaList = document.getElementById("pickerAreaList");
     els.pickerDataTypeList = document.getElementById("pickerDataTypeList");
     els.manageAreasFromCombinedPickerBtn = document.getElementById("manageAreasFromCombinedPickerBtn");
+    els.addCompassPresetBtn = document.getElementById("addCompassPresetBtn");
     els.manageDataTypesFromCombinedPickerBtn = document.getElementById("manageDataTypesFromCombinedPickerBtn");
     els.cancelCombinedPickerBtn = document.getElementById("cancelCombinedPickerBtn");
 
@@ -350,6 +352,7 @@ const Workspace = (() => {
     els.dataSelect.addEventListener("change", handleDataSelectChange);
 
     els.addBtn.addEventListener("click", () => setPointMode("add"));
+    if (els.newSegmentBtn) els.newSegmentBtn.addEventListener("click", startNextNumberedSegment);
     els.lockBtn.addEventListener("click", () => setPointMode("lock"));
     els.textBtn.addEventListener("click", () => toggleCommentTool("text"));
     els.highlighterBtn.addEventListener("click", () => toggleCommentTool("highlighter"));
@@ -754,6 +757,8 @@ const Workspace = (() => {
     els.cancelCombinedPickerBtn.addEventListener("click", () => {
       els.areaDataTypePickerModal.classList.add("hidden");
     });
+    if (els.addCompassPresetBtn) els.addCompassPresetBtn.addEventListener("click", addCompassLabelsToCurrentArea);
+
     els.manageAreasFromCombinedPickerBtn.addEventListener("click", () => {
       els.areaDataTypePickerModal.classList.add("hidden");
       openManageAreasModal();
@@ -856,6 +861,8 @@ const Workspace = (() => {
     areas = isAreaProjectLoad ? clone(initialPageState.areas || DEFAULT_AREAS) : [];
     areas.forEach(area => {
       if (!Array.isArray(area.sideTags)) area.sideTags = [];
+      if (area.sideTags.length === 0) area.sideTags = ["1"];
+      if (!area.lastSelectedSide) area.lastSelectedSide = area.sideTags[0] || "1";
       if (!Array.isArray(area.lockedSides)) area.lockedSides = [];
     });
     currentAreaId = isAreaProjectLoad
@@ -1797,11 +1804,8 @@ const Workspace = (() => {
   }
 
   function openAddAreaModal() {
-    const previous = getArea(currentAreaId);
     els.areaNameInput.value = "New Area";
-    els.inheritSidesHint.textContent = previous && previous.sideTags.length
-      ? `This will start with the same sides as "${previous.name}" (${previous.sideTags.join(", ")}) — remove any that don't apply.`
-      : "";
+    els.inheritSidesHint.textContent = "Starts with Segment 1. Add more segments only when needed.";
     els.manageAreasModal.classList.add("hidden");
     els.areaModal.classList.remove("hidden");
   }
@@ -1810,12 +1814,11 @@ const Workspace = (() => {
     const name = els.areaNameInput.value.trim();
     if (!name) { alert("Enter an area name."); return; }
 
-    const previous = getArea(currentAreaId);
     const id = "area_" + Date.now();
     const area = {
       id, name,
-      sideTags: previous ? previous.sideTags.slice() : [],
-      lastSelectedSide: previous ? (previous.lastSelectedSide || "") : "",
+      sideTags: ["1"],
+      lastSelectedSide: "1",
       lockedSides: []
     };
 
@@ -3414,7 +3417,7 @@ const Workspace = (() => {
       pointMode = "lock";
       commentTool = "none";
       if (els.markupMenu) els.markupMenu.open = false;
-      setStatus("Review mode: refine order, labels and sides. Point input is locked.");
+      setStatus("Review mode: refine order, labels and segments. Point input is locked.");
     } else {
       setStatus("Measure mode: place points and mark up the drawing.");
     }
@@ -3466,7 +3469,7 @@ const Workspace = (() => {
       const removeBtn = document.createElement("span");
       removeBtn.className = "sideTagRemove";
       removeBtn.textContent = "×";
-      removeBtn.title = "Delete this side";
+      removeBtn.title = "Delete this segment";
       removeBtn.addEventListener("click", event => {
         event.stopPropagation();
         removeFlexibleSideTag(area, side);
@@ -3480,9 +3483,43 @@ const Workspace = (() => {
     const addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.className = "sideTagAdd";
-    addBtn.textContent = "+ 新的面";
+    addBtn.textContent = "+ Segment";
     addBtn.addEventListener("click", () => openAddFlexibleSideTag(area));
     els.flexibleSideRow.appendChild(addBtn);
+  }
+
+  function startNextNumberedSegment() {
+    if (!isAreaProject()) return;
+    const area = getArea(currentAreaId);
+    if (!area) return;
+    if (!Array.isArray(area.sideTags)) area.sideTags = [];
+
+    const numbers = area.sideTags
+      .map(tag => Number.parseInt(String(tag), 10))
+      .filter(Number.isFinite);
+    let next = numbers.length ? Math.max(...numbers) + 1 : 1;
+    while (area.sideTags.includes(String(next))) next += 1;
+
+    const label = String(next);
+    area.sideTags.push(label);
+    renderSidePanelForCurrentArea();
+    setCurrentSide(label);
+    scheduleAutoSave();
+    setStatus(`Started Segment ${label}. New points will be assigned here.`);
+  }
+
+  function addCompassLabelsToCurrentArea() {
+    const area = getArea(currentAreaId);
+    if (!area) return;
+    if (!Array.isArray(area.sideTags)) area.sideTags = [];
+    ["N", "E", "S", "W"].forEach(label => {
+      if (!area.sideTags.includes(label)) area.sideTags.push(label);
+    });
+    renderSidePanelForCurrentArea();
+    setCurrentSide("N");
+    renderPickerAreaList();
+    scheduleAutoSave();
+    setStatus("Compass labels N/E/S/W added as optional segments.");
   }
 
   function openAddFlexibleSideTag(area) {
@@ -3511,8 +3548,8 @@ const Workspace = (() => {
     const count = points.filter(p => p.areaId === area.id && p.assignedSide === side).length;
 
     const message = count
-      ? `"${side}" 这个面在 "${area.name}" 里有 ${count} 个点。删除这个面会把这 ${count} 个点也一起永久删除，这个操作不能撤销。确定删除吗？`
-      : `删除 "${side}" 这个面？（这个房间里这一面还没有点）`;
+      ? `Segment "${side}" in "${area.name}" has ${count} point(s). Deleting it will also permanently delete those points. Continue?`
+      : `Delete Segment "${side}"? It has no points.`;
 
     if (!confirm(message)) return;
 

@@ -19,7 +19,7 @@
 */
 
 const CACHE_PREFIX = "fm-new-";
-const CACHE_VERSION = CACHE_PREFIX + "combined-v1-v2-14";
+const CACHE_VERSION = CACHE_PREFIX + "combined-v1-v2-15-unified-segments-experiment";
 const CACHE_NAME = CACHE_VERSION;
 
 // Same-origin app shell, relative to the service worker location.
