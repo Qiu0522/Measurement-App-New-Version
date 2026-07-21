@@ -554,7 +554,7 @@ const App = (() => {
         : "Create Blank Drawing";
 
     els.projectNameInput.value = suggestedName;
-    els.projectSideModeChoices.forEach(choice => { choice.checked = choice.value === "flexible"; });
+    els.projectSideModeChoices.forEach(choice => { choice.checked = choice.value === "compass"; });
 
     els.blankSizeFields.classList.toggle(
       "hidden",
@@ -597,7 +597,7 @@ const App = (() => {
 
     const now = Date.now();
     const selectedSideMode = els.projectSideModeChoices.find(choice => choice.checked);
-    const sideMode = "flexible"; // Unified Area + Segment model for all new files.
+    const sideMode = selectedSideMode ? selectedSideMode.value : "compass";
 
     const project = {
       id: ProjectDB.makeId("project"),

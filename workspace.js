@@ -25,6 +25,7 @@ const Workspace = (() => {
   let areaModalFromManage = false;
   let pendingDeleteAreaId = null;
   let pendingSideNameAreaId = null;
+  let addSegmentFromManage = false;
   let commentTool = "none";
   let brushColor = "#ff0000";
   let brushWidth = 5;
@@ -123,7 +124,6 @@ const Workspace = (() => {
 
     els.dataSelect = document.getElementById("dataSelect");
     els.addBtn = document.getElementById("addBtn");
-    els.newSegmentBtn = document.getElementById("newSegmentBtn");
     els.lockBtn = document.getElementById("lockBtn");
     els.textBtn = document.getElementById("textBtn");
     els.markupMenu = document.getElementById("markupMenu");
@@ -215,10 +215,11 @@ const Workspace = (() => {
     els.reorderBarText = document.getElementById("reorderBarText");
     els.reorderCancelBtn = document.getElementById("reorderCancelBtn");
     els.batchAssignBar = document.getElementById("batchAssignBar");
+    els.batchSideChoices = document.getElementById("batchSideChoices");
     els.batchAssignText = document.getElementById("batchAssignText");
     els.batchAutoBtn = document.getElementById("batchAutoBtn");
     els.batchCancelBtn = document.getElementById("batchCancelBtn");
-    els.batchSideButtons = Array.from(document.querySelectorAll("[data-batch-side]"));
+    els.batchSideButtons = [];
 
     els.measurementModal = document.getElementById("measurementModal");
     els.measurementTitle = document.getElementById("measurementTitle");
@@ -295,12 +296,18 @@ const Workspace = (() => {
     els.pickerAreaList = document.getElementById("pickerAreaList");
     els.pickerDataTypeList = document.getElementById("pickerDataTypeList");
     els.manageAreasFromCombinedPickerBtn = document.getElementById("manageAreasFromCombinedPickerBtn");
-    els.addCompassPresetBtn = document.getElementById("addCompassPresetBtn");
+    els.manageSegmentsFromCombinedPickerBtn = document.getElementById("manageSegmentsFromCombinedPickerBtn");
+    els.manageSegmentsModal = document.getElementById("manageSegmentsModal");
+    els.manageSegmentsHint = document.getElementById("manageSegmentsHint");
+    els.manageSegmentsList = document.getElementById("manageSegmentsList");
+    els.addSegmentFromManageBtn = document.getElementById("addSegmentFromManageBtn");
+    els.closeManageSegmentsBtn = document.getElementById("closeManageSegmentsBtn");
     els.manageDataTypesFromCombinedPickerBtn = document.getElementById("manageDataTypesFromCombinedPickerBtn");
     els.cancelCombinedPickerBtn = document.getElementById("cancelCombinedPickerBtn");
 
 
     els.sideModal = document.getElementById("sideModal");
+    els.contextSideChoices = document.getElementById("contextSideChoices");
     els.cancelSideBtn = document.getElementById("cancelSideBtn");
 
     bindEvents();
@@ -352,7 +359,6 @@ const Workspace = (() => {
     els.dataSelect.addEventListener("change", handleDataSelectChange);
 
     els.addBtn.addEventListener("click", () => setPointMode("add"));
-    if (els.newSegmentBtn) els.newSegmentBtn.addEventListener("click", startNextNumberedSegment);
     els.lockBtn.addEventListener("click", () => setPointMode("lock"));
     els.textBtn.addEventListener("click", () => toggleCommentTool("text"));
     els.highlighterBtn.addEventListener("click", () => toggleCommentTool("highlighter"));
@@ -411,9 +417,7 @@ const Workspace = (() => {
       els.reviewModeBtn.addEventListener("click", () => setWorkspaceMode("review"));
     }
     els.batchAssignBtn.addEventListener("click", startBatchAssign);
-    els.batchSideButtons.forEach(button => {
-      button.addEventListener("click", () => applyBatchSide(button.dataset.batchSide));
-    });
+    renderBatchSideChoices();
     els.batchAutoBtn.addEventListener("click", resetBatchToAuto);
     els.batchCancelBtn.addEventListener("click", cancelBatchAssign);
     els.labelsBtn.addEventListener("click", toggleOrderLabels);
@@ -757,11 +761,24 @@ const Workspace = (() => {
     els.cancelCombinedPickerBtn.addEventListener("click", () => {
       els.areaDataTypePickerModal.classList.add("hidden");
     });
-    if (els.addCompassPresetBtn) els.addCompassPresetBtn.addEventListener("click", addCompassLabelsToCurrentArea);
-
     els.manageAreasFromCombinedPickerBtn.addEventListener("click", () => {
       els.areaDataTypePickerModal.classList.add("hidden");
       openManageAreasModal();
+    });
+    els.manageSegmentsFromCombinedPickerBtn.addEventListener("click", () => {
+      els.areaDataTypePickerModal.classList.add("hidden");
+      openManageSegmentsModal();
+    });
+    els.closeManageSegmentsBtn.addEventListener("click", () => {
+      els.manageSegmentsModal.classList.add("hidden");
+      renderSidePanelForCurrentArea();
+    });
+    els.addSegmentFromManageBtn.addEventListener("click", () => {
+      const area = getArea(currentAreaId);
+      if (!area) return;
+      addSegmentFromManage = true;
+      els.manageSegmentsModal.classList.add("hidden");
+      openAddFlexibleSideTag(area);
     });
     els.manageDataTypesFromCombinedPickerBtn.addEventListener("click", () => {
       els.areaDataTypePickerModal.classList.add("hidden");
@@ -811,18 +828,18 @@ const Workspace = (() => {
     els.confirmSideNameBtn.addEventListener("click", confirmAddFlexibleSideTag);
     els.cancelSideNameBtn.addEventListener("click", () => {
       els.sideNameModal.classList.add("hidden");
-      pendingSideNameDataTypeId = null;
+      pendingSideNameAreaId = null;
+      if (addSegmentFromManage) {
+        addSegmentFromManage = false;
+        renderManageSegmentsList();
+        els.manageSegmentsModal.classList.remove("hidden");
+      }
     });
     els.sideNameInput.addEventListener("keydown", event => {
       if (event.key === "Enter") { event.preventDefault(); confirmAddFlexibleSideTag(); }
     });
 
 
-    els.sideModal.querySelectorAll("[data-side]").forEach(button => {
-      button.addEventListener("click", () => {
-        assignContextPointSide(button.dataset.side);
-      });
-    });
 
     els.cancelSideBtn.addEventListener("click", () => {
       els.sideModal.classList.add("hidden");
@@ -860,9 +877,8 @@ const Workspace = (() => {
     const isAreaProjectLoad = project.sideMode === "flexible";
     areas = isAreaProjectLoad ? clone(initialPageState.areas || DEFAULT_AREAS) : [];
     areas.forEach(area => {
-      if (!Array.isArray(area.sideTags)) area.sideTags = [];
-      if (area.sideTags.length === 0) area.sideTags = ["1"];
-      if (!area.lastSelectedSide) area.lastSelectedSide = area.sideTags[0] || "1";
+      if (!Array.isArray(area.sideTags) || !area.sideTags.length) area.sideTags = ["1"];
+      if (!area.lastSelectedSide || !area.sideTags.includes(area.lastSelectedSide)) area.lastSelectedSide = area.sideTags[0];
       if (!Array.isArray(area.lockedSides)) area.lockedSides = [];
     });
     currentAreaId = isAreaProjectLoad
@@ -873,7 +889,7 @@ const Workspace = (() => {
 
     if (els.dataTypePickerBtn) els.dataTypePickerBtn.classList.toggle("hidden", isAreaProjectLoad);
     if (els.areaDataTypePickerBtn) els.areaDataTypePickerBtn.classList.toggle("hidden", !isAreaProjectLoad);
-    if (els.batchAssignBtn) els.batchAssignBtn.classList.toggle("hidden", isAreaProjectLoad);
+    if (els.batchAssignBtn) els.batchAssignBtn.classList.remove("hidden");
 
     pointMode = state.pointMode || "lock";
     commentTool = "none";
@@ -912,8 +928,9 @@ const Workspace = (() => {
     dataTypes.forEach(dt => {
       if (!Array.isArray(dt.lockedSides)) dt.lockedSides = [];
     });
-    setCurrentSide(isAreaProjectLoad ? (getArea(currentAreaId)?.lastSelectedSide || "") : "");
+    setCurrentSide(isAreaProjectLoad ? (getArea(currentAreaId)?.lastSelectedSide || "1") : "");
     renderAreaDataTypePickerLabel();
+    renderBatchSideChoices();
     reviewFilter = "all";
     updateNoSideBanner();
     setWorkspaceMode("measure");
@@ -1805,7 +1822,7 @@ const Workspace = (() => {
 
   function openAddAreaModal() {
     els.areaNameInput.value = "New Area";
-    els.inheritSidesHint.textContent = "Starts with Segment 1. Add more segments only when needed.";
+    els.inheritSidesHint.textContent = "New Areas start with Segment 1. Add or rename Segments in Manage Segments.";
     els.manageAreasModal.classList.add("hidden");
     els.areaModal.classList.remove("hidden");
   }
@@ -2317,16 +2334,21 @@ const Workspace = (() => {
     if (commentTool !== "none") toggleCommentTool(commentTool);
     batchAssignMode = true;
     batchAssignPoints.clear();
+    renderBatchSideChoices();
     els.batchAssignBtn.classList.add("activeTool");
     els.batchAssignBar.classList.remove("hidden");
     updateBatchAssignBar();
-    setStatus("Batch Side: tap points, then choose N, E, S, W, or Reset Auto.");
+    setStatus("Batch Side: select points, then choose a Side/Segment.");
   }
 
   function toggleBatchPoint(point) {
     const currentDataId = els.dataSelect.value;
     if (point.dataId !== currentDataId) {
-      setStatus("Batch Side only selects points from the current Data type.");
+      setStatus("Batch Side only selects points from the current Data Type.");
+      return;
+    }
+    if (project && project.sideMode === "flexible" && point.areaId !== currentAreaId) {
+      setStatus("Batch Side only selects points from the current Area.");
       return;
     }
 
@@ -2364,7 +2386,11 @@ const Workspace = (() => {
       dataType.manual = false;
       dataType.ordered = true;
     }
-    recalculateDataTypeOrder(dataId);
+    if (project && project.sideMode === "flexible") {
+      recalculateAreaOrder(currentAreaId);
+    } else {
+      recalculateDataTypeOrder(dataId);
+    }
     const after = snapshotOrder(dataId);
     pushUndo({ type: "reorder", dataId, before, after });
     finishBatchAssign(`${batchAssignPoints.size} points assigned to ${side}.`);
@@ -2373,6 +2399,10 @@ const Workspace = (() => {
 
   function resetBatchToAuto() {
     if (!batchAssignPoints.size) return;
+    if (project && project.sideMode === "flexible") {
+      setStatus("Reset Auto is only available in Compass mode. Choose a Segment instead.");
+      return;
+    }
     const dataId = els.dataSelect.value;
     const before = snapshotOrder(dataId);
     const dataType = getDataType(dataId);
@@ -2434,7 +2464,11 @@ const Workspace = (() => {
       dataType.ordered = true;
     }
 
-    recalculateDataTypeOrder(dataId);
+    if (project && project.sideMode === "flexible") {
+      recalculateAreaOrder(contextPoint.areaId);
+    } else {
+      recalculateDataTypeOrder(dataId);
+    }
     const after = snapshotOrder(dataId);
 
     pushUndo({
@@ -3417,7 +3451,7 @@ const Workspace = (() => {
       pointMode = "lock";
       commentTool = "none";
       if (els.markupMenu) els.markupMenu.open = false;
-      setStatus("Review mode: refine order, labels and segments. Point input is locked.");
+      setStatus("Review mode: refine order, labels and sides. Point input is locked.");
     } else {
       setStatus("Measure mode: place points and mark up the drawing.");
     }
@@ -3469,7 +3503,7 @@ const Workspace = (() => {
       const removeBtn = document.createElement("span");
       removeBtn.className = "sideTagRemove";
       removeBtn.textContent = "×";
-      removeBtn.title = "Delete this segment";
+      removeBtn.title = "Delete this side";
       removeBtn.addEventListener("click", event => {
         event.stopPropagation();
         removeFlexibleSideTag(area, side);
@@ -3486,40 +3520,13 @@ const Workspace = (() => {
     addBtn.textContent = "+ Segment";
     addBtn.addEventListener("click", () => openAddFlexibleSideTag(area));
     els.flexibleSideRow.appendChild(addBtn);
-  }
 
-  function startNextNumberedSegment() {
-    if (!isAreaProject()) return;
-    const area = getArea(currentAreaId);
-    if (!area) return;
-    if (!Array.isArray(area.sideTags)) area.sideTags = [];
-
-    const numbers = area.sideTags
-      .map(tag => Number.parseInt(String(tag), 10))
-      .filter(Number.isFinite);
-    let next = numbers.length ? Math.max(...numbers) + 1 : 1;
-    while (area.sideTags.includes(String(next))) next += 1;
-
-    const label = String(next);
-    area.sideTags.push(label);
-    renderSidePanelForCurrentArea();
-    setCurrentSide(label);
-    scheduleAutoSave();
-    setStatus(`Started Segment ${label}. New points will be assigned here.`);
-  }
-
-  function addCompassLabelsToCurrentArea() {
-    const area = getArea(currentAreaId);
-    if (!area) return;
-    if (!Array.isArray(area.sideTags)) area.sideTags = [];
-    ["N", "E", "S", "W"].forEach(label => {
-      if (!area.sideTags.includes(label)) area.sideTags.push(label);
-    });
-    renderSidePanelForCurrentArea();
-    setCurrentSide("N");
-    renderPickerAreaList();
-    scheduleAutoSave();
-    setStatus("Compass labels N/E/S/W added as optional segments.");
+    const manageBtn = document.createElement("button");
+    manageBtn.type = "button";
+    manageBtn.className = "sideTagAdd";
+    manageBtn.textContent = "⚙ Manage";
+    manageBtn.addEventListener("click", openManageSegmentsModal);
+    els.flexibleSideRow.appendChild(manageBtn);
   }
 
   function openAddFlexibleSideTag(area) {
@@ -3532,24 +3539,41 @@ const Workspace = (() => {
   function confirmAddFlexibleSideTag() {
     const area = getArea(pendingSideNameAreaId);
     const name = els.sideNameInput.value.trim();
+    if (!area) return;
+    if (!name) {
+      alert("Enter a Segment name.");
+      return;
+    }
+    if (!Array.isArray(area.sideTags)) area.sideTags = [];
+    if (area.sideTags.includes(name)) {
+      alert(`A Segment named "${name}" already exists in this Area.`);
+      return;
+    }
+
+    area.sideTags.push(name);
     els.sideNameModal.classList.add("hidden");
     pendingSideNameAreaId = null;
-    if (!area || !name) return;
-
-    if (!Array.isArray(area.sideTags)) area.sideTags = [];
-    if (!area.sideTags.includes(name)) area.sideTags.push(name);
-
     renderSidePanelForCurrentArea();
     setCurrentSide(name);
+    renderBatchSideChoices();
     scheduleAutoSave();
+    if (addSegmentFromManage && els.manageSegmentsModal) {
+      addSegmentFromManage = false;
+      renderManageSegmentsList();
+      els.manageSegmentsModal.classList.remove("hidden");
+    }
   }
 
   function removeFlexibleSideTag(area, side) {
+    if ((area.sideTags || []).length <= 1) {
+      alert("Each Area needs at least one Segment.");
+      return;
+    }
     const count = points.filter(p => p.areaId === area.id && p.assignedSide === side).length;
 
     const message = count
-      ? `Segment "${side}" in "${area.name}" has ${count} point(s). Deleting it will also permanently delete those points. Continue?`
-      : `Delete Segment "${side}"? It has no points.`;
+      ? `Segment "${side}" in "${area.name}" has ${count} point(s). Deleting it will permanently delete those points. Continue?`
+      : `Delete Segment "${side}" from "${area.name}"?`;
 
     if (!confirm(message)) return;
 
@@ -3562,9 +3586,131 @@ const Workspace = (() => {
     if (currentSide === side) currentSide = "";
 
     renderSidePanelForCurrentArea();
+    renderBatchSideChoices();
     refreshAllPoints();
     updateNoSideBanner();
     scheduleAutoSave();
+  }
+
+  function getAvailableSides() {
+    if (project && project.sideMode === "flexible") {
+      const area = getArea(currentAreaId);
+      return area && Array.isArray(area.sideTags) ? area.sideTags.slice() : [];
+    }
+    return ["N", "E", "S", "W"];
+  }
+
+  function renderBatchSideChoices() {
+    if (!els.batchSideChoices) return;
+    els.batchSideChoices.innerHTML = "";
+    const sides = getAvailableSides();
+    sides.forEach(side => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.batchSide = side;
+      button.textContent = side;
+      button.disabled = batchAssignPoints.size === 0;
+      button.addEventListener("click", () => applyBatchSide(side));
+      els.batchSideChoices.appendChild(button);
+    });
+    els.batchSideButtons = Array.from(els.batchSideChoices.querySelectorAll("button"));
+    if (els.batchAutoBtn) {
+      els.batchAutoBtn.classList.toggle("hidden", !!(project && project.sideMode === "flexible"));
+    }
+  }
+
+  function renderContextSideChoices() {
+    if (!els.contextSideChoices) return;
+    els.contextSideChoices.innerHTML = "";
+    let sides;
+    if (project && project.sideMode === "flexible" && contextPoint) {
+      const area = getArea(contextPoint.areaId);
+      sides = area && Array.isArray(area.sideTags) ? area.sideTags : [];
+    } else {
+      sides = ["N", "E", "S", "W"];
+    }
+    sides.forEach(side => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = side;
+      button.addEventListener("click", () => assignContextPointSide(side));
+      els.contextSideChoices.appendChild(button);
+    });
+  }
+
+  function openManageSegmentsModal() {
+    if (!(project && project.sideMode === "flexible")) return;
+    renderManageSegmentsList();
+    els.manageSegmentsModal.classList.remove("hidden");
+  }
+
+  function renderManageSegmentsList() {
+    if (!els.manageSegmentsList) return;
+    const area = getArea(currentAreaId);
+    els.manageSegmentsList.innerHTML = "";
+    if (!area) return;
+    els.manageSegmentsHint.textContent = `Segments for ${area.name}. Their order is also used for review and export.`;
+    const tags = Array.isArray(area.sideTags) ? area.sideTags : [];
+    tags.forEach((side, index) => {
+      const row = document.createElement("div");
+      row.className = "manageDataTypeRow";
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = side;
+      nameInput.title = "Segment name";
+      nameInput.addEventListener("change", () => renameSegment(area, side, nameInput.value));
+
+      const count = document.createElement("span");
+      count.className = "manageDataTypeCount";
+      const pointCount = points.filter(p => p.areaId === area.id && p.assignedSide === side).length;
+      count.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
+
+      const up = document.createElement("button");
+      up.type = "button"; up.textContent = "↑"; up.title = "Move up"; up.disabled = index === 0;
+      up.addEventListener("click", () => moveSegment(area, index, -1));
+      const down = document.createElement("button");
+      down.type = "button"; down.textContent = "↓"; down.title = "Move down"; down.disabled = index === tags.length - 1;
+      down.addEventListener("click", () => moveSegment(area, index, 1));
+      const del = document.createElement("button");
+      del.type = "button"; del.className = "manageDataTypeDeleteBtn"; del.textContent = "Delete";
+      del.addEventListener("click", () => { removeFlexibleSideTag(area, side); renderManageSegmentsList(); });
+
+      row.append(nameInput, count, up, down, del);
+      els.manageSegmentsList.appendChild(row);
+    });
+  }
+
+  function renameSegment(area, oldName, proposedName) {
+    const name = (proposedName || "").trim();
+    if (!name || name === oldName) { renderManageSegmentsList(); return; }
+    if (area.sideTags.includes(name)) { alert(`A Segment named "${name}" already exists.`); renderManageSegmentsList(); return; }
+    const index = area.sideTags.indexOf(oldName);
+    if (index < 0) return;
+    area.sideTags[index] = name;
+    points.forEach(point => {
+      if (point.areaId === area.id && point.assignedSide === oldName) point.assignedSide = name;
+    });
+    if (area.lastSelectedSide === oldName) area.lastSelectedSide = name;
+    if (currentAreaId === area.id && currentSide === oldName) currentSide = name;
+    renderSidePanelForCurrentArea();
+    renderBatchSideChoices();
+    refreshAllPoints();
+    recalculateAreaOrder(area.id);
+    scheduleAutoSave();
+    renderManageSegmentsList();
+  }
+
+  function moveSegment(area, index, delta) {
+    const next = index + delta;
+    if (next < 0 || next >= area.sideTags.length) return;
+    [area.sideTags[index], area.sideTags[next]] = [area.sideTags[next], area.sideTags[index]];
+    recalculateAreaOrder(area.id);
+    renderSidePanelForCurrentArea();
+    renderBatchSideChoices();
+    refreshAllPoints();
+    scheduleAutoSave();
+    renderManageSegmentsList();
   }
 
   function noSidePoints() {

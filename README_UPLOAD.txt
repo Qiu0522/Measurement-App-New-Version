@@ -305,3 +305,11 @@ MEASUREMENT LABEL STYLING
 
 FILES CHANGED IN 6.5: style.css, workspace.js, sw.js
 sw.js CACHE_VERSION bumped to v6-5.
+
+Version 16 — Side Management
+- New files still choose either Compass (N/E/S/W) or Custom Segments.
+- Custom Segment Areas start with Segment 1.
+- Added Manage Segments: add, rename, reorder, and delete segments per Area.
+- Batch Side now works in both Compass and Custom Segment projects.
+- Custom Batch Side buttons follow the active Area's segment list.
+- Cache version: field-measurement-side-management-v16.

@@ -2274,3 +2274,6 @@ button {
   color: #666;
   line-height: 1.4;
 }
+
+.batchSideChoices { display:inline-flex; gap:6px; flex-wrap:wrap; }
+#manageSegmentsList .manageDataTypeRow { grid-template-columns:minmax(120px,1fr) auto auto auto auto; }

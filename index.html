@@ -124,10 +124,9 @@
           <span id="areaDataTypePickerLabel">Area · Data Type</span>
         </button>
         <button id="addBtn" class="toolbarButton measureOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Point</button>
-        <button id="newSegmentBtn" class="toolbarButton measureOnly" type="button" title="Start the next numbered segment"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M5 7h10M5 12h7M5 17h10M18 5v14m-3-3 3 3 3-3"/></svg>New Segment</button>
         <button id="lockBtn" class="toolbarButton measureOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Lock</button>
         <button id="orderBtn" class="toolbarButton reviewOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M8 4v16m-3-3 3 3 3-3M16 20V4m-3 3 3-3 3 3"/></svg>Auto Sort</button>
-        <button id="batchAssignBtn" class="toolbarButton reviewOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><path d="m5 7 2 2 4-5m5 14h5M3 18h7"/></svg>Batch Segment</button>
+        <button id="batchAssignBtn" class="toolbarButton reviewOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><path d="m5 7 2 2 4-5m5 14h5M3 18h7"/></svg>Batch Side</button>
         <button id="labelsBtn" class="toolbarButton" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M4 6h10l6 6-8 8-8-8z"/><circle cx="9" cy="10" r="1"/></svg>Labels</button>
         <button id="reviewBtn" class="toolbarButton reviewOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Preview CSV</button>
         <div class="zoomControl labelSizeControl measureOnly" title="Measurement label size">
@@ -181,10 +180,7 @@
 
     <div id="batchAssignBar" class="batchAssignBar hidden">
       <strong id="batchAssignText">Batch Side: 0 selected</strong>
-      <button type="button" data-batch-side="N">N</button>
-      <button type="button" data-batch-side="E">E</button>
-      <button type="button" data-batch-side="S">S</button>
-      <button type="button" data-batch-side="W">W</button>
+<span id="batchSideChoices" class="batchSideChoices"></span>
       <button id="batchAutoBtn" type="button">Reset Auto</button>
       <button id="batchCancelBtn" type="button">Cancel</button>
     </div>
@@ -403,15 +399,15 @@
         <input id="projectNameInput" type="text" placeholder="Level 11">
       </label>
 
-      <fieldset class="projectSideModeField hidden" aria-hidden="true">
+      <fieldset class="projectSideModeField">
         <legend>Side Naming (applies to the whole work file)</legend>
         <label class="radioChoice">
-          <input type="radio" name="projectSideMode" value="compass">
+          <input type="radio" name="projectSideMode" value="compass" checked>
           <span>Compass (N/E/S/W) — building facades</span>
         </label>
         <label class="radioChoice">
-          <input type="radio" name="projectSideMode" value="flexible" checked>
-          <span>Custom named sides — rooms/units, curved walls</span>
+          <input type="radio" name="projectSideMode" value="flexible">
+          <span>Custom Segments (1/2/3…) — rooms, units, divided areas</span>
         </label>
       </fieldset>
 
@@ -455,7 +451,7 @@
 
       <div class="measurementKeypad v6Keypad">
         <div class="currentSidePanel">
-          <div class="currentSideLabel">Current Segment <span class="currentSideReminder">Check before entering</span></div>
+          <div class="currentSideLabel">Current Side <span class="currentSideReminder">Check before entering</span></div>
           <div id="compassSideRow" class="sideRow">
             <button class="sideBtn" data-side="N" type="button">N</button>
             <button class="sideBtn" data-side="E" type="button">E</button>
@@ -662,12 +658,24 @@
       </div>
 
       <div class="modalActions">
-        <button id="manageAreasFromCombinedPickerBtn" type="button">⚙ Manage Area</button>
-        <button id="addCompassPresetBtn" type="button" title="Add N/E/S/W as segment labels">＋ Compass Labels</button>
-        <button id="manageDataTypesFromCombinedPickerBtn" type="button">⚙ Manage Data Type</button>
+        <button id="manageAreasFromCombinedPickerBtn" type="button">⚙ Manage Areas</button>
+        <button id="manageSegmentsFromCombinedPickerBtn" type="button">⚙ Manage Segments</button>
+        <button id="manageDataTypesFromCombinedPickerBtn" type="button">⚙ Manage Data Types</button>
       </div>
       <div class="modalActions">
         <button id="cancelCombinedPickerBtn" class="primaryButton" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="manageSegmentsModal" class="modalBackdrop hidden">
+    <div class="modalCard manageDataTypesCard">
+      <h2>Manage Segments</h2>
+      <p id="manageSegmentsHint" class="manageDataTypesHint">Segments belong to the currently selected Area. Rename, reorder, add, or delete them here.</p>
+      <div id="manageSegmentsList" class="manageDataTypesList"></div>
+      <div class="modalActions">
+        <button id="addSegmentFromManageBtn" type="button">+ Add Segment</button>
+        <button id="closeManageSegmentsBtn" class="primaryButton" type="button">Done</button>
       </div>
     </div>
   </div>
@@ -676,7 +684,7 @@
     <div class="modalCard">
       <h2>New Segment</h2>
       <label>
-        Name (e.g. 面1, 面2)
+        Name (e.g. 1, 2, 3 or Left, Middle, Right)
         <input id="sideNameInput" type="text" value="">
       </label>
       <div class="modalActions">
@@ -688,15 +696,10 @@
 
   <div id="sideModal" class="modalBackdrop hidden">
     <div class="modalCard">
-      <h2>Assign Segment</h2>
-      <p>Only this point changes segment. Other points remain fixed.</p>
+      <h2>Assign Side</h2>
+      <p>Only this point changes side. Other points remain fixed.</p>
 
-      <div class="sideButtons">
-        <button data-side="N">N</button>
-        <button data-side="E">E</button>
-        <button data-side="S">S</button>
-        <button data-side="W">W</button>
-      </div>
+      <div id="contextSideChoices" class="sideButtons"></div>
 
       <button id="cancelSideBtn" class="fullWidthButton" type="button">Cancel</button>
     </div>
