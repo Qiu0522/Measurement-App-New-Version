@@ -2370,64 +2370,59 @@ button {
 .sortReviewCancelBtn, .sortReviewApplyBtn { min-height: 44px; border-radius: 12px; font-weight: 800; }
 .sortReviewApplyBtn { box-shadow: 0 9px 20px rgba(37, 99, 235, .2); }
 
-/* Temporary markers shown only while the review drawer is open. */
+/* Temporary markers shown only while the review drawer is open — v19.
+   Unchanged points receive no class and therefore no marker. */
 .point.sort-review-changed,
 .point.sort-review-warning { z-index: 120 !important; }
-.point.sort-review-changed::after {
-  content: attr(data-sort-review-label);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  min-width: max-content;
-  padding: 5px 8px;
-  border: 1px solid rgba(255,255,255,.85);
-  border-radius: 9px;
-  color: #fff;
-  background: linear-gradient(145deg, #2864c9, #4f46e5);
-  box-shadow: 0 6px 18px rgba(43,83,166,.28);
-  font-size: 11px;
-  font-weight: 900;
-  line-height: 1;
-  pointer-events: none;
+
+/* A true visible number change gets a restrained blue square highlight. */
+.point.sort-review-changed {
+  box-shadow: 0 0 0 2px #4f7ed8, 0 0 0 5px rgba(79,126,216,.16) !important;
+  border-radius: 5px !important;
 }
-.point.sort-review-changed::before {
-  content: "";
-  position: absolute;
-  inset: -7px;
-  border: 3px solid #4d7fe0;
-  border-radius: 50%;
-  box-shadow: 0 0 0 4px rgba(77,127,224,.17);
-  pointer-events: none;
+.point.sort-review-changed::before,
+.point.sort-review-changed::after { content: none !important; }
+
+/* Warnings remain visually distinct from number changes. */
+.point.sort-review-warning {
+  box-shadow: 0 0 0 2px #d99418, 0 0 0 5px rgba(217,148,24,.18) !important;
 }
-.point.sort-review-warning { box-shadow: 0 0 0 4px rgba(226,154,33,.28) !important; }
-.point.sort-review-warning > * { pointer-events: none; }
-.point.sort-review-warning::selection { background: transparent; }
 .point.sort-review-warning:not(.sort-review-changed)::after {
   content: attr(data-sort-review-warning);
   position: absolute;
-  right: -13px;
-  top: -14px;
+  right: -12px;
+  top: -13px;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border: 2px solid #fff;
-  border-radius: 50%;
+  border-radius: 6px;
   color: #fff;
   background: #d58a12;
-  box-shadow: 0 4px 11px rgba(160,96,0,.3);
-  font-size: 12px;
+  box-shadow: 0 4px 10px rgba(160,96,0,.25);
+  font-size: 11px;
   font-weight: 900;
   pointer-events: none;
 }
+.point.sort-review-warning-high {
+  box-shadow: 0 0 0 2px #d23c35, 0 0 0 5px rgba(210,60,53,.18) !important;
+}
 .point.sort-review-warning-high:not(.sort-review-changed)::after { background: #d23c35; }
-.point.sort-review-changed.sort-review-warning::after { background: linear-gradient(145deg, #b66a08, #d58a12); }
-.point.sort-review-changed.sort-review-warning-high::after { background: linear-gradient(145deg, #b42318, #d23c35); }
+.point.sort-review-changed.sort-review-warning {
+  box-shadow: 0 0 0 2px #d99418, 0 0 0 5px rgba(217,148,24,.2) !important;
+}
+.point.sort-review-changed.sort-review-warning-high {
+  box-shadow: 0 0 0 2px #d23c35, 0 0 0 5px rgba(210,60,53,.2) !important;
+}
+
+/* Selected review item: no movement, only a short purple pulse. */
 .point.sort-review-active { z-index: 180 !important; }
-.point.sort-review-active::before { border-color: #111827; box-shadow: 0 0 0 5px rgba(17,24,39,.17), 0 0 0 9px rgba(255,255,255,.82); }
-.sort-review-flash { animation: sortReviewFlashV18 .34s ease-in-out 4 alternate; }
-@keyframes sortReviewFlashV18 { from { transform: scale(1); } to { transform: scale(1.18); } }
+.sort-review-flash { animation: sortReviewFlashV19 .3s ease-in-out 3 alternate; }
+@keyframes sortReviewFlashV19 {
+  from { filter: brightness(1); transform: scale(1); }
+  to { filter: brightness(1.2) drop-shadow(0 0 7px rgba(124,58,237,.8)); transform: scale(1.12); }
+}
 
 @media (max-width: 760px) {
   .sortReviewBackdrop { padding: 8px; background: rgba(15,23,42,.18); }

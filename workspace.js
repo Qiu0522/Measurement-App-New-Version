@@ -3339,16 +3339,27 @@ const Workspace = (() => {
     afterMap.forEach((afterEntry, uid) => {
       const beforeEntry = beforeMap.get(uid);
       if (!beforeEntry) return;
-      if (beforeEntry.assignedSeq !== afterEntry.assignedSeq || beforeEntry.manualSeq !== afterEntry.manualSeq) {
-        const point = points.find(p => p.uid === uid);
-        if (point) changes.push({
-          uid,
-          point,
-          side: afterEntry.assignedSide || beforeEntry.assignedSide || "",
-          beforeSeq: beforeEntry.assignedSeq,
-          afterSeq: afterEntry.assignedSeq
-        });
-      }
+
+      // Review is about visible numbering, not internal ordering metadata.
+      // manualSeq may be rewritten while the displayed Side + sequence stays
+      // exactly the same; those points must not appear under Changes.
+      const beforeSide = beforeEntry.assignedSide || "";
+      const afterSide = afterEntry.assignedSide || beforeSide;
+      const beforeSeq = beforeEntry.assignedSeq ?? null;
+      const afterSeq = afterEntry.assignedSeq ?? null;
+      const visibleNumberChanged = beforeSide !== afterSide || beforeSeq !== afterSeq;
+      if (!visibleNumberChanged) return;
+
+      const point = points.find(p => p.uid === uid);
+      if (point) changes.push({
+        uid,
+        point,
+        side: afterSide,
+        beforeSide,
+        afterSide,
+        beforeSeq,
+        afterSeq
+      });
     });
     return changes;
   }
@@ -3443,7 +3454,7 @@ const Workspace = (() => {
         const element = findPointElement(change.uid);
         if (!element) return;
         element.classList.add("sort-review-changed");
-        element.dataset.sortReviewLabel = `${change.side}${change.beforeSeq || "?"} → ${change.side}${change.afterSeq || "?"}`;
+        element.dataset.sortReviewLabel = `${change.beforeSide || change.side}${change.beforeSeq ?? "?"} → ${change.afterSide || change.side}${change.afterSeq ?? "?"}`;
       });
     }
 
@@ -3476,18 +3487,15 @@ const Workspace = (() => {
     activeSortReviewUid = uid;
     document.querySelectorAll(".sortReviewRow.selectedReviewRow, .sortWarningRow.selectedReviewRow").forEach(row => row.classList.remove("selectedReviewRow"));
     if (sourceRow) sourceRow.classList.add("selectedReviewRow");
-    els.drawingArea.querySelectorAll(".point.sort-review-active").forEach(item => item.classList.remove("sort-review-active"));
-    element.classList.add("sort-review-active", "sort-review-flash");
+    els.drawingArea.querySelectorAll(".point.sort-review-active").forEach(item => item.classList.remove("sort-review-active", "sort-review-flash"));
 
-    const wrapperRect = els.drawingWrapper.getBoundingClientRect();
-    const elementRect = element.getBoundingClientRect();
-    const panelWidth = els.autoSortReviewModal?.querySelector(".autoSortReviewCard")?.getBoundingClientRect().width || 0;
-    const availableWidth = Math.max(180, wrapperRect.width - panelWidth);
-    const targetLeft = els.drawingWrapper.scrollLeft + (elementRect.left - wrapperRect.left) - availableWidth / 2;
-    const targetTop = els.drawingWrapper.scrollTop + (elementRect.top - wrapperRect.top) - wrapperRect.height / 2;
-    els.drawingWrapper.scrollTo({ left: Math.max(0, targetLeft), top: Math.max(0, targetTop), behavior: "smooth" });
-
-    setTimeout(() => element.classList.remove("sort-review-flash"), 1500);
+    // Keep the drawing exactly where the reviewer left it. Clicking a review
+    // card only adds a short pulse to the existing marker; it never scrolls,
+    // recentres, or changes zoom.
+    element.classList.add("sort-review-active");
+    void element.offsetWidth;
+    element.classList.add("sort-review-flash");
+    setTimeout(() => element.classList.remove("sort-review-flash"), 900);
   }
 
   function createReviewStat(value, label, tone) {
@@ -3519,7 +3527,7 @@ const Workspace = (() => {
       row.type = "button";
       row.className = "sortReviewRow";
       row.dataset.reviewUid = change.uid;
-      row.innerHTML = `<span class="sortReviewRowIndex">${index + 1}</span><span class="sortReviewRowBody"><strong>${pointDisplayName(change.point, change.beforeSeq)}</strong><small>${change.side || "Unassigned"} assignment retained</small></span><span class="sortReviewChangePill"><b>${change.side}${change.beforeSeq || "?"}</b><i>→</i><b>${change.side}${change.afterSeq || "?"}</b></span>`;
+      row.innerHTML = `<span class="sortReviewRowIndex">${index + 1}</span><span class="sortReviewRowBody"><strong>${pointDisplayName(change.point, change.beforeSeq)}</strong><small>${change.side || "Unassigned"} assignment retained</small></span><span class="sortReviewChangePill"><b>${change.beforeSide || change.side}${change.beforeSeq ?? "?"}</b><i>→</i><b>${change.afterSide || change.side}${change.afterSeq ?? "?"}</b></span>`;
       row.addEventListener("click", () => focusReviewPoint(change.uid, row));
       els.autoSortReviewChanges.appendChild(row);
     });
@@ -3529,7 +3537,7 @@ const Workspace = (() => {
       const row = document.createElement("button");
       row.type = "button";
       row.className = `sortWarningRow ${warning.level}`;
-      row.innerHTML = `<span class="sortWarningIcon">${warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i"}</span><span class="sortReviewRowBody"><strong>${warning.text}</strong><small>${warning.level === "high" ? "High attention" : warning.level === "check" ? "Please verify manually" : "Information"}</small></span>${warning.uid ? '<span class="sortReviewLocate">Locate</span>' : ""}`;
+      row.innerHTML = `<span class="sortWarningIcon">${warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i"}</span><span class="sortReviewRowBody"><strong>${warning.text}</strong><small>${warning.level === "high" ? "High attention" : warning.level === "check" ? "Please verify manually" : "Information"}</small></span>${warning.uid ? '<span class="sortReviewLocate">Flash</span>' : ""}`;
       if (warning.uid) row.addEventListener("click", () => focusReviewPoint(warning.uid, row));
       else row.disabled = true;
       els.autoSortReviewWarnings.appendChild(row);
