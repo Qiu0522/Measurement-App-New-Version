@@ -268,11 +268,11 @@
       </label>
 
       <fieldset class="autoSortSidesField hidden" id="autoSortSidesField">
-        <legend>应用到哪些面（可多选）</legend>
+        <legend>Segments to include (all recommended)</legend>
         <div id="autoSortSidesList" class="radioRow"></div>
       </fieldset>
 
-      <fieldset class="autoSortMethod">
+      <fieldset class="autoSortMethod hidden">
         <legend>Sort Method</legend>
         <label class="radioChoice">
           <input type="radio" name="autoSortMethod" value="position" checked>
@@ -285,7 +285,7 @@
       </fieldset>
 
       <fieldset class="autoSortDirection" id="autoSortCompassDirectionField">
-        <legend>Direction (compass-mode data types)</legend>
+        <legend>Sort direction</legend>
         <label class="radioChoice">
           <input type="radio" name="autoSortDirection" value="clockwise" checked>
           <span>↻ Clockwise</span>
@@ -319,6 +319,48 @@
       <div class="modalActions">
         <button id="cancelAutoSortBtn" type="button">Cancel</button>
         <button id="confirmAutoSortBtn" class="primaryButton" type="button">Sort</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="autoSortReviewModal" class="modalBackdrop sortReviewBackdrop hidden">
+    <div class="modalCard autoSortReviewCard" role="dialog" aria-modal="true" aria-label="Auto Sort Review">
+      <header class="sortReviewHeader">
+        <div class="sortReviewHeaderIcon" aria-hidden="true">✓</div>
+        <div id="autoSortReviewSummary" class="autoSortReviewSummary"></div>
+      </header>
+
+      <div class="sortReviewGuide">
+        <span class="sortReviewGuideIcon">⌖</span>
+        <span>Select a card to locate the point on the drawing. Review markers are temporary and will not appear in exports.</span>
+      </div>
+
+      <section class="sortReviewSection">
+        <div class="sortReviewSectionHeader">
+          <div>
+            <span class="sortReviewEyebrow">ORDER REVIEW</span>
+            <h3>Number changes</h3>
+          </div>
+          <button id="toggleSortReviewChangesBtn" class="sortReviewToggle active" type="button" aria-pressed="true">Show on drawing</button>
+        </div>
+        <div id="autoSortReviewChanges" class="sortReviewList"></div>
+      </section>
+
+      <section class="sortReviewSection">
+        <div class="sortReviewSectionHeader">
+          <div>
+            <span class="sortReviewEyebrow warning">MANUAL CHECK</span>
+            <h3>Warnings</h3>
+          </div>
+          <button id="toggleSortReviewWarningsBtn" class="sortReviewToggle active" type="button" aria-pressed="true">Show on drawing</button>
+        </div>
+        <div id="autoSortReviewWarnings" class="sortReviewList"></div>
+      </section>
+
+      <div class="modalActions stickyReviewActions">
+        <button id="cancelAutoSortReviewBtn" class="sortReviewCancelBtn" type="button">Cancel</button>
+        <button id="applyAutoSortReviewBtn" class="primaryButton sortReviewApplyBtn" type="button">Apply Auto Sort</button>
       </div>
     </div>
   </div>
