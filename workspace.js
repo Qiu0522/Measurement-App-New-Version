@@ -1014,12 +1014,24 @@ const Workspace = (() => {
     setStatus("Project loaded. Press Save anytime; safety save runs every 3 minutes.");
   }
 
+  function closeAllWorkspaceModals() {
+    // These modals live outside #workspaceView, so hiding the workspace on
+    // its own does not hide them — they'd otherwise float on top of Library.
+    if (pendingAutoSortReview) {
+      cancelPendingAutoSortReview();
+    }
+    document.body.classList.remove("sortReviewOpen");
+    document.querySelectorAll(".modalBackdrop").forEach(modal => modal.classList.add("hidden"));
+  }
+
   async function closeProject(saveBeforeClosing = true) {
     if (!project) return;
 
     if (saveBeforeClosing && SaveController.isDirty()) {
       await SaveController.save("close", true);
     }
+
+    closeAllWorkspaceModals();
 
     project = null;
     pdfDocument = null;
