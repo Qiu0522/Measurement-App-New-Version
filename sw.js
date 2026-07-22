@@ -19,7 +19,7 @@
 */
 
 const CACHE_PREFIX = "fm-new-";
-const CACHE_VERSION = "field-measurement-final-v31";
+const CACHE_VERSION = "field-measurement-review-filter-v28";
 const CACHE_NAME = CACHE_VERSION;
 
 // Same-origin app shell, relative to the service worker location.
