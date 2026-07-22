@@ -18,8 +18,7 @@
   cached copies are cleared and every device picks up the new version.
 */
 
-const CACHE_PREFIX = "fm-new-";
-const CACHE_VERSION = "field-measurement-review-filter-v28-3";
+const CACHE_VERSION = "field-measurement-combined-v1-v2-19-autosort-review";
 const CACHE_NAME = CACHE_VERSION;
 
 // Same-origin app shell, relative to the service worker location.
@@ -67,7 +66,7 @@ self.addEventListener("activate", event => {
 
     await Promise.all(
       keys
-        .filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .filter(key => key !== CACHE_NAME)
         .map(key => caches.delete(key))
     );
 

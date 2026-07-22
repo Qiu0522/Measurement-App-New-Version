@@ -8,25 +8,14 @@ const Workspace = (() => {
     { id: "data4", name: "完成后立柱测量尺寸", color: "#8000ff", counter: 1, export: true, ordered: false, direction: "clockwise" }
   ];
 
-  const DEFAULT_AREAS = [
-    { id: "area1", name: "Area 1", sideTags: ["1"], lastSelectedSide: "1", lockedSides: [] }
-  ];
-
   let project = null;
 
   let points = [];
   let dataTypes = [];
-  let areas = [];
-  let sharedSegments = ["1"];
-  let currentAreaId = null;
 
   let pointMode = "lock";
   let dataTypeModalFromManage = false;
   let pendingDeleteDataTypeId = null;
-  let areaModalFromManage = false;
-  let pendingDeleteAreaId = null;
-  let pendingSideNameAreaId = null;
-  let addSegmentFromManage = false;
   let commentTool = "none";
   let brushColor = "#ff0000";
   let brushWidth = 5;
@@ -37,6 +26,8 @@ const Workspace = (() => {
   let pinchActive = false;
   let pinchStartDist = 0;
   let pinchStartZoom = 1;
+  let latestPinchEvent = null;
+  let pinchFrameRequested = false;
 
   let clickStartX = 0;
   let clickStartY = 0;
@@ -72,11 +63,11 @@ const Workspace = (() => {
   let noteDrag = null;
   let textNoteColor = "#ff0000";
   let reviewFilter = "all";
-  let autoSortReviewFilter = "all";
+  let reviewSearchTerm = "";
   let currentSide = "";
   let setPositionPoint = null;
   let pendingExportTypes = null;
-  let pendingExportPoints = null;
+  let pendingExportKind = null;
   let workspaceMode = "measure";
 
   let measurementCallback = null;
@@ -87,10 +78,8 @@ const Workspace = (() => {
   let lastAutoSortDataId = null;
   let lastAutoSortSide = "N";
   let lastAutoSortDirection = "clockwise";
-  let lastAutoSortMethod = "position";
-  let lastAutoSortAreaId = null;
-  let lastAutoSortFlexibleDirection = "lr";
   let pendingAutoSortReview = null;
+  let autoSortReviewFilter = "all";
   let sortReviewShowChanges = true;
   let sortReviewShowWarnings = true;
   let activeSortReviewUid = null;
@@ -159,24 +148,25 @@ const Workspace = (() => {
     els.reviewBtn = document.getElementById("reviewBtn");
     els.reviewSidebar = document.getElementById("reviewSidebar");
     els.reviewList = document.getElementById("reviewList");
+    els.reviewSearchInput = document.getElementById("reviewSearchInput");
     els.closeReviewBtn = document.getElementById("closeReviewBtn");
     els.orderBtn = document.getElementById("orderBtn");
     els.measureModeBtn = document.getElementById("measureModeBtn");
     els.reviewModeBtn = document.getElementById("reviewModeBtn");
-    els.reviewDataTypeFilter = document.getElementById("reviewDataTypeFilter");
-    els.reviewDataTypeFilterWrap = document.getElementById("reviewDataTypeFilterWrap");
     els.drawingToolsRow = document.querySelector(".drawingTools");
     els.dataTypeSwatch = document.getElementById("dataTypeSwatch");
     els.batchAssignBtn = document.getElementById("batchAssignBtn");
     els.labelsBtn = document.getElementById("labelsBtn");
     els.exportCsvBtn = document.getElementById("exportCsvBtn");
     els.exportPdfBtn = document.getElementById("exportPdfBtn");
+    els.exportJsonBtn = document.getElementById("exportJsonBtn");
     els.manualSaveBtn = document.getElementById("manualSaveBtn");
 
     els.saveIndicator = document.getElementById("saveIndicator");
     els.status = document.getElementById("status");
 
     els.drawingWrapper = document.getElementById("drawingWrapper");
+    els.drawingSizer = document.getElementById("drawingSizer");
     els.drawingArea = document.getElementById("drawingArea");
     els.drawingImage = document.getElementById("drawingImage");
     els.pdfCanvas = document.getElementById("pdfCanvas");
@@ -189,31 +179,26 @@ const Workspace = (() => {
     els.pointDeleteAction = document.getElementById("pointDeleteAction");
 
     els.autoSortModal = document.getElementById("autoSortModal");
-    els.autoSortDataType = document.getElementById("autoSortDataType");
     els.autoSortDataTypeLabel = document.getElementById("autoSortDataTypeLabel");
+    els.autoSortDataType = document.getElementById("autoSortDataType");
     els.autoSortSide = document.getElementById("autoSortSide");
-    els.autoSortSideDropdownField = document.getElementById("autoSortSideDropdownField");
-    els.autoSortSidesField = document.getElementById("autoSortSidesField");
-    els.autoSortSidesList = document.getElementById("autoSortSidesList");
     els.autoSortDirectionChoices = Array.from(document.querySelectorAll('input[name="autoSortDirection"]'));
-    els.autoSortMethodChoices = Array.from(document.querySelectorAll('input[name="autoSortMethod"]'));
-    els.autoSortFlexibleDirectionChoices = Array.from(document.querySelectorAll('input[name="autoSortFlexibleDirection"]'));
-    els.autoSortCompassDirectionField = document.getElementById("autoSortCompassDirectionField");
-    els.autoSortFlexibleDirectionField = document.getElementById("autoSortFlexibleDirectionField");
     els.confirmAutoSortBtn = document.getElementById("confirmAutoSortBtn");
     els.cancelAutoSortBtn = document.getElementById("cancelAutoSortBtn");
+    els.sideChoices = Array.from(document.querySelectorAll(".sideBtn"));
+
     els.autoSortReviewModal = document.getElementById("autoSortReviewModal");
     els.autoSortReviewSummary = document.getElementById("autoSortReviewSummary");
-    els.autoSortReviewChanges = document.getElementById("autoSortReviewChanges");
     els.autoSortReviewFilters = document.getElementById("autoSortReviewFilters");
+    els.autoSortReviewChanges = document.getElementById("autoSortReviewChanges");
     els.autoSortReviewWarnings = document.getElementById("autoSortReviewWarnings");
     els.toggleSortReviewChangesBtn = document.getElementById("toggleSortReviewChangesBtn");
     els.toggleSortReviewWarningsBtn = document.getElementById("toggleSortReviewWarningsBtn");
-    els.applyAutoSortReviewBtn = document.getElementById("applyAutoSortReviewBtn");
     els.cancelAutoSortReviewBtn = document.getElementById("cancelAutoSortReviewBtn");
-    els.sideChoices = Array.from(document.querySelectorAll(".sideBtn"));
-    els.compassSideRow = document.getElementById("compassSideRow");
-    els.flexibleSideRow = document.getElementById("flexibleSideRow");
+    els.applyAutoSortReviewBtn = document.getElementById("applyAutoSortReviewBtn");
+
+    els.reviewDataTypeFilterWrap = document.getElementById("reviewDataTypeFilterWrap");
+    els.reviewDataTypeFilter = document.getElementById("reviewDataTypeFilter");
 
     els.setPositionModal = document.getElementById("setPositionModal");
     els.setPositionInfo = document.getElementById("setPositionInfo");
@@ -232,11 +217,10 @@ const Workspace = (() => {
     els.reorderBarText = document.getElementById("reorderBarText");
     els.reorderCancelBtn = document.getElementById("reorderCancelBtn");
     els.batchAssignBar = document.getElementById("batchAssignBar");
-    els.batchSideChoices = document.getElementById("batchSideChoices");
     els.batchAssignText = document.getElementById("batchAssignText");
     els.batchAutoBtn = document.getElementById("batchAutoBtn");
     els.batchCancelBtn = document.getElementById("batchCancelBtn");
-    els.batchSideButtons = [];
+    els.batchSideButtons = Array.from(document.querySelectorAll("[data-batch-side]"));
 
     els.measurementModal = document.getElementById("measurementModal");
     els.measurementTitle = document.getElementById("measurementTitle");
@@ -261,10 +245,6 @@ const Workspace = (() => {
     els.dataTypeModal = document.getElementById("dataTypeModal");
     els.dataTypeNameInput = document.getElementById("dataTypeNameInput");
     els.dataTypeColorInput = document.getElementById("dataTypeColorInput");
-    els.sideNameModal = document.getElementById("sideNameModal");
-    els.sideNameInput = document.getElementById("sideNameInput");
-    els.cancelSideNameBtn = document.getElementById("cancelSideNameBtn");
-    els.confirmSideNameBtn = document.getElementById("confirmSideNameBtn");
     els.cancelDataTypeBtn = document.getElementById("cancelDataTypeBtn");
     els.confirmDataTypeBtn = document.getElementById("confirmDataTypeBtn");
 
@@ -287,44 +267,8 @@ const Workspace = (() => {
     els.deleteDataTypePermanentlyBtn = document.getElementById("deleteDataTypePermanentlyBtn");
     els.cancelReassignDataTypeBtn = document.getElementById("cancelReassignDataTypeBtn");
 
-    els.areaDataTypePickerBtn = document.getElementById("areaDataTypePickerBtn");
-    els.areaDataTypeSwatch = document.getElementById("areaDataTypeSwatch");
-    els.areaDataTypePickerLabel = document.getElementById("areaDataTypePickerLabel");
-
-    els.areaModal = document.getElementById("areaModal");
-    els.areaNameInput = document.getElementById("areaNameInput");
-    els.inheritSidesHint = document.getElementById("inheritSidesHint");
-    els.cancelAreaBtn = document.getElementById("cancelAreaBtn");
-    els.confirmAreaBtn = document.getElementById("confirmAreaBtn");
-
-    els.manageAreasModal = document.getElementById("manageAreasModal");
-    els.manageAreasList = document.getElementById("manageAreasList");
-    els.addAreaFromManageBtn = document.getElementById("addAreaFromManageBtn");
-    els.closeManageAreasBtn = document.getElementById("closeManageAreasBtn");
-
-    els.reassignAreaModal = document.getElementById("reassignAreaModal");
-    els.reassignAreaTitle = document.getElementById("reassignAreaTitle");
-    els.reassignAreaHint = document.getElementById("reassignAreaHint");
-    els.reassignAreaList = document.getElementById("reassignAreaList");
-    els.deleteAreaPermanentlyBtn = document.getElementById("deleteAreaPermanentlyBtn");
-    els.cancelReassignAreaBtn = document.getElementById("cancelReassignAreaBtn");
-
-    els.areaDataTypePickerModal = document.getElementById("areaDataTypePickerModal");
-    els.pickerAreaList = document.getElementById("pickerAreaList");
-    els.pickerDataTypeList = document.getElementById("pickerDataTypeList");
-    els.manageAreasFromCombinedPickerBtn = document.getElementById("manageAreasFromCombinedPickerBtn");
-    els.manageSegmentsFromCombinedPickerBtn = document.getElementById("manageSegmentsFromCombinedPickerBtn");
-    els.manageSegmentsModal = document.getElementById("manageSegmentsModal");
-    els.manageSegmentsHint = document.getElementById("manageSegmentsHint");
-    els.manageSegmentsList = document.getElementById("manageSegmentsList");
-    els.addSegmentFromManageBtn = document.getElementById("addSegmentFromManageBtn");
-    els.closeManageSegmentsBtn = document.getElementById("closeManageSegmentsBtn");
-    els.manageDataTypesFromCombinedPickerBtn = document.getElementById("manageDataTypesFromCombinedPickerBtn");
-    els.cancelCombinedPickerBtn = document.getElementById("cancelCombinedPickerBtn");
-
 
     els.sideModal = document.getElementById("sideModal");
-    els.contextSideChoices = document.getElementById("contextSideChoices");
     els.cancelSideBtn = document.getElementById("cancelSideBtn");
 
     bindEvents();
@@ -444,13 +388,29 @@ const Workspace = (() => {
       });
     }
     els.batchAssignBtn.addEventListener("click", startBatchAssign);
-    renderBatchSideChoices();
+    els.batchSideButtons.forEach(button => {
+      button.addEventListener("click", () => applyBatchSide(button.dataset.batchSide));
+    });
     els.batchAutoBtn.addEventListener("click", resetBatchToAuto);
     els.batchCancelBtn.addEventListener("click", cancelBatchAssign);
     els.labelsBtn.addEventListener("click", toggleOrderLabels);
 
     els.exportCsvBtn.addEventListener("click", exportCSV);
     els.exportPdfBtn.addEventListener("click", exportPDF);
+    els.exportJsonBtn.addEventListener("click", exportJSON);
+
+    if (els.reviewSearchInput) {
+      els.reviewSearchInput.addEventListener("input", () => {
+        reviewSearchTerm = els.reviewSearchInput.value.trim().toLowerCase();
+        renderReviewList();
+      });
+      els.reviewSearchInput.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          jumpToFirstReviewMatch();
+        }
+      });
+    }
 
     els.manualSaveBtn.addEventListener("click", async () => {
       els.manualSaveBtn.disabled = true;
@@ -547,6 +507,8 @@ const Workspace = (() => {
       abortActiveInteraction();
       pinchStartDist = touchDistance(event.touches[0], event.touches[1]);
       pinchStartZoom = zoomLevel;
+      latestPinchEvent = null;
+      pinchFrameRequested = false;
       event.preventDefault();
     }, { passive: false });
 
@@ -554,35 +516,32 @@ const Workspace = (() => {
       if (!pinchActive || event.touches.length !== 2) return;
       event.preventDefault();
 
-      const wrapper = els.drawingWrapper;
-      const rect = wrapper.getBoundingClientRect();
-      const dist = touchDistance(event.touches[0], event.touches[1]);
-      if (pinchStartDist <= 0) return;
+      /*
+        iOS can fire touchmove faster than the screen repaints. Doing the
+        rect/offset reads and the transform/scroll writes on every single
+        event forces a synchronous layout each time (layout thrashing),
+        which is what makes the pinch feel like it's lagging behind the
+        fingers. Instead, just remember the latest event and do the actual
+        work at most once per animation frame.
+      */
+      latestPinchEvent = event;
+      if (pinchFrameRequested) return;
+      pinchFrameRequested = true;
 
-      const oldZoom = zoomLevel;
-      const newZoom = Math.max(
-        0.3,
-        Math.min(5, Math.round(pinchStartZoom * (dist / pinchStartDist) * 100) / 100)
-      );
-      if (newZoom === oldZoom) return;
-
-      const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2 - rect.left;
-      const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2 - rect.top;
-
-      const contentX = (wrapper.scrollLeft + midX) / oldZoom;
-      const contentY = (wrapper.scrollTop + midY) / oldZoom;
-
-      zoomLevel = newZoom;
-      applyZoom();
-
-      wrapper.scrollLeft = contentX * newZoom - midX;
-      wrapper.scrollTop = contentY * newZoom - midY;
+      requestAnimationFrame(() => {
+        pinchFrameRequested = false;
+        if (!pinchActive || !latestPinchEvent) return;
+        applyPinchZoom(latestPinchEvent);
+        latestPinchEvent = null;
+      });
     }, { passive: false });
 
     const endPinch = event => {
       if (!pinchActive) return;
       if (event.touches.length < 2) {
         pinchActive = false;
+        latestPinchEvent = null;
+        pinchFrameRequested = false;
         scheduleAutoSave();
       }
     };
@@ -628,30 +587,25 @@ const Workspace = (() => {
     els.autoSortModal.addEventListener("click", event => {
       if (event.target === els.autoSortModal) closeAutoSortModal();
     });
+
+    // Auto Sort Review dialog.
     if (els.applyAutoSortReviewBtn) els.applyAutoSortReviewBtn.addEventListener("click", applyPendingAutoSortReview);
     if (els.cancelAutoSortReviewBtn) els.cancelAutoSortReviewBtn.addEventListener("click", cancelPendingAutoSortReview);
     if (els.toggleSortReviewChangesBtn) els.toggleSortReviewChangesBtn.addEventListener("click", () => {
       sortReviewShowChanges = !sortReviewShowChanges;
       setReviewToggle(els.toggleSortReviewChangesBtn, sortReviewShowChanges);
-      applyAutoSortReviewMarkers(pendingAutoSortReview?.review);
+      applyAutoSortReviewMarkers(pendingAutoSortReview && pendingAutoSortReview.review);
     });
     if (els.toggleSortReviewWarningsBtn) els.toggleSortReviewWarningsBtn.addEventListener("click", () => {
       sortReviewShowWarnings = !sortReviewShowWarnings;
       setReviewToggle(els.toggleSortReviewWarningsBtn, sortReviewShowWarnings);
-      applyAutoSortReviewMarkers(pendingAutoSortReview?.review);
+      applyAutoSortReviewMarkers(pendingAutoSortReview && pendingAutoSortReview.review);
     });
     if (els.autoSortReviewModal) {
       els.autoSortReviewModal.addEventListener("click", event => {
         if (event.target === els.autoSortReviewModal) cancelPendingAutoSortReview();
       });
     }
-    els.autoSortDataType.addEventListener("change", () => {
-      if (isAreaProject()) populateAreaAutoSortSideOptions();
-      else populateAutoSortSideOptions();
-    });
-    els.autoSortMethodChoices.forEach(choice => {
-      choice.addEventListener("change", updateAutoSortDirectionFieldVisibility);
-    });
 
     // Set Position modal.
     els.confirmSetPositionBtn.addEventListener("click", confirmSetPosition);
@@ -667,17 +621,18 @@ const Workspace = (() => {
     els.assignSideBtn.addEventListener("click", () => {
       els.noSideModal.classList.add("hidden");
       pendingExportTypes = null;
-      pendingExportPoints = null;
+      pendingExportKind = null;
       jumpToNextNoSide();
     });
     els.exportAnywayBtn.addEventListener("click", () => {
       els.noSideModal.classList.add("hidden");
       const types = pendingExportTypes;
-      const areaPoints = pendingExportPoints;
+      const kind = pendingExportKind;
       pendingExportTypes = null;
-      pendingExportPoints = null;
-      if (areaPoints) proceedExportCSVAreaMode(areaPoints);
-      else if (types) proceedExportCSV(types);
+      pendingExportKind = null;
+      if (types && kind === "csv") {
+        proceedExportCSV(types);
+      }
     });
     els.noSideBanner.addEventListener("click", jumpToNextNoSide);
 
@@ -781,7 +736,8 @@ const Workspace = (() => {
     els.addDataTypeFromManageBtn.addEventListener("click", () => {
       dataTypeModalFromManage = true;
       els.manageDataTypesModal.classList.add("hidden");
-      resetDataTypeModalDefaults();
+      els.dataTypeNameInput.value = "New Data";
+      els.dataTypeColorInput.value = "#000000";
       els.dataTypeModal.classList.remove("hidden");
     });
 
@@ -801,89 +757,12 @@ const Workspace = (() => {
       els.manageDataTypesModal.classList.remove("hidden");
     });
 
-    els.areaDataTypePickerBtn.addEventListener("click", openCombinedPicker);
-    els.cancelCombinedPickerBtn.addEventListener("click", () => {
-      els.areaDataTypePickerModal.classList.add("hidden");
-    });
-    els.manageAreasFromCombinedPickerBtn.addEventListener("click", () => {
-      els.areaDataTypePickerModal.classList.add("hidden");
-      openManageAreasModal();
-    });
-    els.manageSegmentsFromCombinedPickerBtn.addEventListener("click", () => {
-      els.areaDataTypePickerModal.classList.add("hidden");
-      openManageSegmentsModal();
-    });
-    els.closeManageSegmentsBtn.addEventListener("click", () => {
-      els.manageSegmentsModal.classList.add("hidden");
-      renderSidePanelForCurrentArea();
-    });
-    els.addSegmentFromManageBtn.addEventListener("click", () => {
-      const area = getArea(currentAreaId);
-      if (!area) return;
-      addSegmentFromManage = true;
-      els.manageSegmentsModal.classList.add("hidden");
-      openAddFlexibleSideTag(area);
-    });
-    els.manageDataTypesFromCombinedPickerBtn.addEventListener("click", () => {
-      els.areaDataTypePickerModal.classList.add("hidden");
-      openManageDataTypesModal();
-    });
 
-    els.closeManageAreasBtn.addEventListener("click", () => {
-      els.manageAreasModal.classList.add("hidden");
+    els.sideModal.querySelectorAll("[data-side]").forEach(button => {
+      button.addEventListener("click", () => {
+        assignContextPointSide(button.dataset.side);
+      });
     });
-
-    els.addAreaFromManageBtn.addEventListener("click", () => {
-      areaModalFromManage = true;
-      els.manageAreasModal.classList.add("hidden");
-      openAddAreaModal();
-    });
-
-    els.cancelAreaBtn.addEventListener("click", () => {
-      els.areaModal.classList.add("hidden");
-      if (pendingDeleteAreaId) {
-        openReassignAreaModal(pendingDeleteAreaId);
-        return;
-      }
-      if (areaModalFromManage) {
-        areaModalFromManage = false;
-        renderManageAreasList();
-        els.manageAreasModal.classList.remove("hidden");
-      }
-    });
-    els.confirmAreaBtn.addEventListener("click", confirmAddArea);
-
-    els.cancelReassignAreaBtn.addEventListener("click", () => {
-      pendingDeleteAreaId = null;
-      els.reassignAreaModal.classList.add("hidden");
-      renderManageAreasList();
-      els.manageAreasModal.classList.remove("hidden");
-    });
-
-    els.deleteAreaPermanentlyBtn.addEventListener("click", () => {
-      if (!pendingDeleteAreaId) return;
-      deleteAreaAndPoints(pendingDeleteAreaId);
-      pendingDeleteAreaId = null;
-      els.reassignAreaModal.classList.add("hidden");
-      renderManageAreasList();
-      els.manageAreasModal.classList.remove("hidden");
-    });
-
-    els.confirmSideNameBtn.addEventListener("click", confirmAddFlexibleSideTag);
-    els.cancelSideNameBtn.addEventListener("click", () => {
-      els.sideNameModal.classList.add("hidden");
-      pendingSideNameAreaId = null;
-      if (addSegmentFromManage) {
-        addSegmentFromManage = false;
-        renderManageSegmentsList();
-        els.manageSegmentsModal.classList.remove("hidden");
-      }
-    });
-    els.sideNameInput.addEventListener("keydown", event => {
-      if (event.key === "Enter") { event.preventDefault(); confirmAddFlexibleSideTag(); }
-    });
-
-
 
     els.cancelSideBtn.addEventListener("click", () => {
       els.sideModal.classList.add("hidden");
@@ -902,10 +781,8 @@ const Workspace = (() => {
     if (!Object.keys(pageStates).length) {
       pageStates[1] = {
         points: clone(state.points || []), dataTypes: clone(state.dataTypes || DEFAULT_DATA_TYPES),
-        areas: clone(state.areas || DEFAULT_AREAS),
         textNotes: clone(state.textNotes || []), commentImageData: state.commentImageData || "",
-        selectedDataId: state.selectedDataId || null, selectedAreaId: state.selectedAreaId || null,
-        scrollLeft: state.scrollLeft || 0, scrollTop: state.scrollTop || 0
+        selectedDataId: state.selectedDataId || null, scrollLeft: state.scrollLeft || 0, scrollTop: state.scrollTop || 0
       };
     }
     const initialPageState = pageStates[currentPdfPage] || pageStates[1] || {};
@@ -917,35 +794,6 @@ const Workspace = (() => {
       if (typeof dataType.ordered !== "boolean") dataType.ordered = false;
       if (!dataType.direction) dataType.direction = "clockwise";
     });
-
-    const isAreaProjectLoad = project.sideMode === "flexible";
-    areas = isAreaProjectLoad ? clone(initialPageState.areas || DEFAULT_AREAS) : [];
-    const migratedSegments = [];
-    const rememberSegment = value => {
-      const name = String(value || "").trim();
-      if (name && !migratedSegments.includes(name)) migratedSegments.push(name);
-    };
-    (state.sharedSegments || []).forEach(rememberSegment);
-    areas.forEach(area => (area.sideTags || []).forEach(rememberSegment));
-    sharedSegments = isAreaProjectLoad ? (migratedSegments.length ? migratedSegments : ["1"]) : [];
-    areas.forEach(area => {
-      // Segment names are shared by the whole project. Each Area keeps its own
-      // order and point assignments, while receiving any missing shared names.
-      const localOrder = Array.isArray(area.sideTags) ? area.sideTags.filter(name => sharedSegments.includes(name)) : [];
-      sharedSegments.forEach(name => { if (!localOrder.includes(name)) localOrder.push(name); });
-      area.sideTags = localOrder.length ? localOrder : sharedSegments.slice();
-      if (!area.lastSelectedSide || !sharedSegments.includes(area.lastSelectedSide)) area.lastSelectedSide = sharedSegments[0] || "";
-      if (!Array.isArray(area.lockedSides)) area.lockedSides = [];
-    });
-    currentAreaId = isAreaProjectLoad
-      ? (initialPageState.selectedAreaId && areas.some(a => a.id === initialPageState.selectedAreaId)
-          ? initialPageState.selectedAreaId
-          : (areas[0] && areas[0].id))
-      : null;
-
-    if (els.dataTypePickerBtn) els.dataTypePickerBtn.classList.toggle("hidden", isAreaProjectLoad);
-    if (els.areaDataTypePickerBtn) els.areaDataTypePickerBtn.classList.toggle("hidden", !isAreaProjectLoad);
-    if (els.batchAssignBtn) els.batchAssignBtn.classList.remove("hidden");
 
     pointMode = state.pointMode || "lock";
     commentTool = "none";
@@ -984,11 +832,8 @@ const Workspace = (() => {
     dataTypes.forEach(dt => {
       if (!Array.isArray(dt.lockedSides)) dt.lockedSides = [];
     });
-    setCurrentSide(isAreaProjectLoad ? (getArea(currentAreaId)?.lastSelectedSide || "1") : "");
-    renderAreaDataTypePickerLabel();
-    renderBatchSideChoices();
+    setCurrentSide("");
     reviewFilter = "all";
-    renderReviewDataTypeFilter();
     updateNoSideBanner();
     setWorkspaceMode("measure");
 
@@ -1014,24 +859,12 @@ const Workspace = (() => {
     setStatus("Project loaded. Press Save anytime; safety save runs every 3 minutes.");
   }
 
-  function closeAllWorkspaceModals() {
-    // These modals live outside #workspaceView, so hiding the workspace on
-    // its own does not hide them — they'd otherwise float on top of Library.
-    if (pendingAutoSortReview) {
-      cancelPendingAutoSortReview();
-    }
-    document.body.classList.remove("sortReviewOpen");
-    document.querySelectorAll(".modalBackdrop").forEach(modal => modal.classList.add("hidden"));
-  }
-
   async function closeProject(saveBeforeClosing = true) {
     if (!project) return;
 
     if (saveBeforeClosing && SaveController.isDirty()) {
       await SaveController.save("close", true);
     }
-
-    closeAllWorkspaceModals();
 
     project = null;
     pdfDocument = null;
@@ -1122,16 +955,15 @@ const Workspace = (() => {
   function captureCurrentPageState() {
     if (!project) return;
     pageStates[currentPdfPage] = {
-      points: clone(points), dataTypes: clone(dataTypes), areas: clone(areas), textNotes: clone(textNotes),
+      points: clone(points), dataTypes: clone(dataTypes), textNotes: clone(textNotes),
       commentImageData, selectedDataId: els.dataSelect ? els.dataSelect.value : null,
-      selectedAreaId: currentAreaId,
       scrollLeft: els.drawingWrapper.scrollLeft, scrollTop: els.drawingWrapper.scrollTop
     };
   }
 
   function emptyPageState() {
-    return { points: [], dataTypes: clone(DEFAULT_DATA_TYPES), areas: clone(DEFAULT_AREAS), textNotes: [], commentImageData: "",
-      selectedDataId: DEFAULT_DATA_TYPES[0].id, selectedAreaId: DEFAULT_AREAS[0].id, scrollLeft: 0, scrollTop: 0 };
+    return { points: [], dataTypes: clone(DEFAULT_DATA_TYPES), textNotes: [], commentImageData: "",
+      selectedDataId: DEFAULT_DATA_TYPES[0].id, scrollLeft: 0, scrollTop: 0 };
   }
 
   async function goToPdfPage(pageNumber) {
@@ -1344,7 +1176,6 @@ const Workspace = (() => {
 
   function handleDataSelectChange() {
     updateDataTypeSwatch();
-    renderAreaDataTypePickerLabel();
     scheduleAutoSave();
   }
 
@@ -1390,101 +1221,6 @@ const Workspace = (() => {
 
       els.dataTypePickerList.appendChild(row);
     });
-  }
-
-  function renderAreaDataTypePickerLabel() {
-    if (!els.areaDataTypeSwatch) return;
-    const area = getArea(currentAreaId);
-    const dataType = getDataType(els.dataSelect.value);
-    els.areaDataTypeSwatch.style.background = dataType ? (dataType.color || "#111") : "transparent";
-    if (els.areaDataTypePickerLabel) {
-      els.areaDataTypePickerLabel.textContent =
-        (area ? area.name : "Area") + " · " + (dataType ? dataType.name : "Data Type");
-    }
-  }
-
-  function openCombinedPicker() {
-    renderPickerAreaList();
-    renderPickerDataTypeList();
-    els.areaDataTypePickerModal.classList.remove("hidden");
-  }
-
-  function renderPickerAreaList() {
-    els.pickerAreaList.innerHTML = "";
-
-    areas.forEach(area => {
-      const pointCount = points.filter(point => point.areaId === area.id).length;
-
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "dataTypePickerRow";
-      row.classList.toggle("activeDataType", area.id === currentAreaId);
-
-      const name = document.createElement("span");
-      name.className = "dataTypePickerRowName";
-      name.textContent = area.name;
-
-      const count = document.createElement("span");
-      count.className = "dataTypePickerRowCount";
-      count.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
-
-      row.appendChild(name);
-      row.appendChild(count);
-
-      row.addEventListener("click", () => {
-        currentAreaId = area.id;
-        currentSide = area.lastSelectedSide || "";
-        renderAreaDataTypePickerLabel();
-        renderPickerAreaList();
-        scheduleAutoSave();
-      });
-
-      els.pickerAreaList.appendChild(row);
-    });
-  }
-
-  function renderPickerDataTypeList() {
-    els.pickerDataTypeList.innerHTML = "";
-    const currentId = els.dataSelect.value;
-
-    dataTypes.forEach(dataType => {
-      const pointCount = points.filter(point => point.dataId === dataType.id).length;
-
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "dataTypePickerRow";
-      row.classList.toggle("activeDataType", dataType.id === currentId);
-
-      const swatch = document.createElement("span");
-      swatch.className = "dataTypePickerRowSwatch";
-      swatch.style.background = dataType.color || "#111";
-
-      const name = document.createElement("span");
-      name.className = "dataTypePickerRowName";
-      name.textContent = dataType.name;
-
-      const count = document.createElement("span");
-      count.className = "dataTypePickerRowCount";
-      count.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
-
-      row.appendChild(swatch);
-      row.appendChild(name);
-      row.appendChild(count);
-
-      row.addEventListener("click", () => {
-        els.dataSelect.value = dataType.id;
-        renderAreaDataTypePickerLabel();
-        renderPickerDataTypeList();
-        scheduleAutoSave();
-      });
-
-      els.pickerDataTypeList.appendChild(row);
-    });
-  }
-
-  function resetDataTypeModalDefaults() {
-    els.dataTypeNameInput.value = "New Data";
-    els.dataTypeColorInput.value = "#000000";
   }
 
   function confirmDataType() {
@@ -1669,7 +1405,8 @@ const Workspace = (() => {
       // pendingDeleteDataTypeId stays set — confirmDataType() checks it
       // and finishes the reassign-and-delete once the new type exists.
       els.reassignDataTypeModal.classList.add("hidden");
-      resetDataTypeModalDefaults();
+      els.dataTypeNameInput.value = "New Data";
+      els.dataTypeColorInput.value = "#000000";
       els.dataTypeModal.classList.remove("hidden");
     });
     els.reassignDataTypeList.appendChild(createRow);
@@ -1679,16 +1416,7 @@ const Workspace = (() => {
     points.forEach(point => {
       if (point.dataId === sourceId) point.dataId = destinationId;
     });
-
     dataTypes = dataTypes.filter(dt => dt.id !== sourceId);
-
-    if (project && project.sideMode === "flexible") {
-      // A data type's points can span several areas — refresh every area
-      // that could be affected so per-data-type seq numbers stay correct.
-      areas.forEach(area => recalculateAreaOrder(area.id));
-    } else {
-      recalculateDataTypeOrder(destinationId);
-    }
 
     renderDataSelect(els.dataSelect.value === sourceId ? destinationId : undefined);
     refreshAllPoints();
@@ -1707,229 +1435,6 @@ const Workspace = (() => {
     refreshAllPoints();
     updateNoSideBanner();
     scheduleAutoSave();
-  }
-
-  /* ================= Area management (area-mode projects only) ================= */
-
-  function openManageAreasModal() {
-    renderManageAreasList();
-    els.manageAreasModal.classList.remove("hidden");
-  }
-
-  function renderManageAreasList() {
-    els.manageAreasList.innerHTML = "";
-
-    areas.forEach(area => {
-      const pointCount = points.filter(point => point.areaId === area.id).length;
-
-      const row = document.createElement("div");
-      row.className = "manageDataTypeRow";
-
-      const nameInput = document.createElement("input");
-      nameInput.type = "text";
-      nameInput.value = area.name;
-      nameInput.title = "Name";
-      nameInput.addEventListener("change", () => {
-        const trimmed = nameInput.value.trim();
-        if (!trimmed) {
-          nameInput.value = area.name;
-          return;
-        }
-        area.name = trimmed;
-        renderAreaDataTypePickerLabel();
-        refreshAllPoints();
-        scheduleAutoSave();
-      });
-
-      const countLabel = document.createElement("span");
-      countLabel.className = "manageDataTypeCount";
-      countLabel.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
-
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "manageDataTypeDeleteBtn";
-      deleteBtn.textContent = "Delete";
-      deleteBtn.addEventListener("click", () => deleteArea(area.id));
-
-      row.appendChild(nameInput);
-      row.appendChild(countLabel);
-      row.appendChild(deleteBtn);
-      els.manageAreasList.appendChild(row);
-    });
-  }
-
-  function deleteArea(areaId) {
-    if (areas.length <= 1) {
-      alert("You need at least one area — add a new one before deleting this one.");
-      return;
-    }
-
-    const area = getArea(areaId);
-    if (!area) return;
-
-    const affectedPoints = points.filter(point => point.areaId === areaId);
-
-    if (!affectedPoints.length) {
-      if (!confirm(`Delete the area "${area.name}"? It has no points, so nothing else will be affected.`)) return;
-      deleteAreaAndPoints(areaId);
-      renderManageAreasList();
-      return;
-    }
-
-    openReassignAreaModal(areaId);
-  }
-
-  function openReassignAreaModal(areaId) {
-    const area = getArea(areaId);
-    if (!area) return;
-
-    pendingDeleteAreaId = areaId;
-    const affectedCount = points.filter(point => point.areaId === areaId).length;
-
-    els.reassignAreaTitle.textContent = `Move ${affectedCount} point(s) out of "${area.name}"?`;
-    els.reassignAreaHint.textContent =
-      `"${area.name}" has ${affectedCount} point(s). Pick another area to move them to before ` +
-      "deleting this one, or delete everything permanently below.";
-
-    renderReassignAreaList(areaId);
-    els.manageAreasModal.classList.add("hidden");
-    els.reassignAreaModal.classList.remove("hidden");
-  }
-
-  function renderReassignAreaList(sourceId) {
-    els.reassignAreaList.innerHTML = "";
-
-    areas.filter(a => a.id !== sourceId).forEach(area => {
-      const pointCount = points.filter(point => point.areaId === area.id).length;
-
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "dataTypePickerRow";
-
-      const name = document.createElement("span");
-      name.className = "dataTypePickerRowName";
-      name.textContent = `Move to "${area.name}"`;
-
-      const count = document.createElement("span");
-      count.className = "dataTypePickerRowCount";
-      count.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
-
-      row.appendChild(name);
-      row.appendChild(count);
-
-      row.addEventListener("click", () => {
-        reassignPointsAndDeleteArea(sourceId, area.id);
-        pendingDeleteAreaId = null;
-        els.reassignAreaModal.classList.add("hidden");
-        renderManageAreasList();
-        els.manageAreasModal.classList.remove("hidden");
-      });
-
-      els.reassignAreaList.appendChild(row);
-    });
-
-    const createRow = document.createElement("button");
-    createRow.type = "button";
-    createRow.className = "dataTypePickerRow createNewDataTypeRow";
-    createRow.textContent = "+ Create New Area";
-    createRow.addEventListener("click", () => {
-      // pendingDeleteAreaId stays set — confirmAddArea() checks it and
-      // finishes the reassign-and-delete once the new area exists.
-      els.reassignAreaModal.classList.add("hidden");
-      openAddAreaModal();
-    });
-    els.reassignAreaList.appendChild(createRow);
-  }
-
-  function reassignPointsAndDeleteArea(sourceId, destinationId) {
-    const destArea = getArea(destinationId);
-
-    points.forEach(point => {
-      if (point.areaId !== sourceId) return;
-
-      const side = point.assignedSide || "";
-      if (destArea && side) {
-        if (!Array.isArray(destArea.sideTags)) destArea.sideTags = [];
-        if (!destArea.sideTags.includes(side)) destArea.sideTags.push(side);
-      }
-
-      point.areaId = destinationId;
-    });
-
-    areas = areas.filter(a => a.id !== sourceId);
-
-    if (currentAreaId === sourceId) {
-      currentAreaId = destinationId;
-      currentSide = destArea ? (destArea.lastSelectedSide || "") : "";
-    }
-
-    if (destArea) recalculateAreaOrder(destinationId);
-
-    renderAreaDataTypePickerLabel();
-    refreshAllPoints();
-    updateNoSideBanner();
-    scheduleAutoSave();
-    setStatus(`Points moved to "${getArea(destinationId)?.name || "the new area"}".`);
-  }
-
-  function deleteAreaAndPoints(areaId) {
-    const affectedPoints = points.filter(point => point.areaId === areaId);
-    affectedPoints.forEach(point => removePointElement(point.uid));
-    points = points.filter(point => point.areaId !== areaId);
-    areas = areas.filter(a => a.id !== areaId);
-
-    if (currentAreaId === areaId) {
-      currentAreaId = areas[0] ? areas[0].id : null;
-      currentSide = areas[0] ? (areas[0].lastSelectedSide || "") : "";
-    }
-
-    renderAreaDataTypePickerLabel();
-    refreshAllPoints();
-    updateNoSideBanner();
-    scheduleAutoSave();
-  }
-
-  function openAddAreaModal() {
-    els.areaNameInput.value = "New Area";
-    els.inheritSidesHint.textContent = "New Areas automatically use the project’s shared Segment list.";
-    els.manageAreasModal.classList.add("hidden");
-    els.areaModal.classList.remove("hidden");
-  }
-
-  function confirmAddArea() {
-    const name = els.areaNameInput.value.trim();
-    if (!name) { alert("Enter an area name."); return; }
-
-    const id = "area_" + Date.now();
-    const area = {
-      id, name,
-      sideTags: sharedSegments.length ? sharedSegments.slice() : ["1"],
-      lastSelectedSide: sharedSegments[0] || "1",
-      lockedSides: []
-    };
-
-    areas.push(area);
-    currentAreaId = id;
-    currentSide = area.lastSelectedSide;
-
-    els.areaModal.classList.add("hidden");
-    renderAreaDataTypePickerLabel();
-    scheduleAutoSave();
-
-    if (pendingDeleteAreaId) {
-      const sourceId = pendingDeleteAreaId;
-      pendingDeleteAreaId = null;
-      reassignPointsAndDeleteArea(sourceId, id);
-      renderManageAreasList();
-      els.manageAreasModal.classList.remove("hidden");
-      return;
-    }
-
-    if (areaModalFromManage) {
-      areaModalFromManage = false;
-      renderManageAreasList();
-      els.manageAreasModal.classList.remove("hidden");
-    }
   }
 
   function setPointMode(mode) {
@@ -2047,13 +1552,9 @@ const Workspace = (() => {
     const dataType = getDataType(els.dataSelect.value);
     if (!dataType) return;
 
-    const isAreaMode = project && project.sideMode === "flexible";
-    const area = isAreaMode ? getArea(currentAreaId) : null;
-
     const point = {
       uid: "point_" + Date.now() + "_" + Math.random().toString(16).slice(2),
       dataId: dataType.id,
-      areaId: isAreaMode ? currentAreaId : undefined,
       number: dataType.counter,
       x,
       y,
@@ -2070,17 +1571,7 @@ const Workspace = (() => {
 
     // If this side is already locked (manually ordered), append the new point
     // at the end of that side; otherwise it just keeps creation order.
-    if (isAreaMode) {
-      if (isAreaSideLocked(area, currentSide)) {
-        const sideMax = Math.max(
-          0,
-          ...pointsInAreaSide(currentAreaId, currentSide)
-            .filter(p => p !== point)
-            .map(p => p.manualSeq || 0)
-        );
-        point.manualSeq = sideMax + 1;
-      }
-    } else if (isSideLocked(dataType, currentSide)) {
+    if (isSideLocked(dataType, currentSide)) {
       const sideMax = Math.max(
         0,
         ...pointsInSide(dataType.id, currentSide)
@@ -2092,12 +1583,7 @@ const Workspace = (() => {
 
     pushUndo({ type: "add", point });
     createPointElement(point);
-
-    if (isAreaMode) {
-      recalculateAreaOrder(currentAreaId);
-    } else {
-      recalculateDataTypeOrder(dataType.id);
-    }
+    recalculateDataTypeOrder(dataType.id);
     renderDataSelect(dataType.id);
     updateNoSideBanner();
 
@@ -2225,7 +1711,7 @@ const Workspace = (() => {
         });
 
         if (point.assignedSide) {
-          recalculateOrderForPoint(point);
+          recalculateDataTypeOrder(point.dataId);
         }
 
         scheduleAutoSave();
@@ -2256,14 +1742,10 @@ const Workspace = (() => {
 
     const dataType = getDataType(point.dataId);
     const measurement = point.measurement || String(point.number);
-    const isAreaMode = project && project.sideMode === "flexible";
-    const area = isAreaMode ? getArea(point.areaId) : null;
 
     element.textContent =
       showOrderLabels && point.assignedSide && point.assignedSeq
-        ? (isAreaMode
-            ? `${area ? area.name : "?"}-${point.assignedSide}-${point.assignedSeq}`
-            : `${point.assignedSide}${point.assignedSeq}`)
+        ? `${point.assignedSide}${point.assignedSeq}`
         : measurement;
 
     element.style.left = point.x + "px";
@@ -2280,17 +1762,6 @@ const Workspace = (() => {
   function editPoint(point) {
     const oldValue = point.measurement;
     const oldSide = point.assignedSide || "";
-    const isAreaMode = project && project.sideMode === "flexible";
-
-    // Points from every data type (and, in area mode, every area) render
-    // together on the same canvas, so editing one must switch the active
-    // data type — and area — to match it first, otherwise the side panel
-    // below would show the wrong area's sides.
-    renderDataSelect(point.dataId);
-    if (isAreaMode) {
-      currentAreaId = point.areaId;
-      renderAreaDataTypePickerLabel();
-    }
 
     // Editing a point starts from that point's own side. The operator can
     // change it on the keypad and the new side is saved together with value.
@@ -2318,11 +1789,7 @@ const Workspace = (() => {
           newSide
         });
 
-        if (isAreaMode) {
-          recalculateAreaOrder(point.areaId);
-        } else {
-          recalculateDataTypeOrder(point.dataId);
-        }
+        recalculateDataTypeOrder(point.dataId);
         updatePointElement(point);
         updateNoSideBanner();
         renderDataSelect(point.dataId);
@@ -2337,11 +1804,7 @@ const Workspace = (() => {
     points = points.filter(item => item.uid !== point.uid);
     removePointElement(point.uid);
 
-    if (project && project.sideMode === "flexible") {
-      recalculateAreaOrder(point.areaId);
-    } else {
-      recalculateDataTypeOrder(point.dataId);
-    }
+    recalculateDataTypeOrder(point.dataId);
 
     pushUndo({ type: "delete", point });
     renderDataSelect(point.dataId);
@@ -2370,11 +1833,7 @@ const Workspace = (() => {
     });
 
     if (point.assignedSide) {
-      if (project && project.sideMode === "flexible") {
-        recalculateAreaOrder(point.areaId);
-      } else {
-        recalculateDataTypeOrder(point.dataId);
-      }
+      recalculateDataTypeOrder(point.dataId);
     }
 
     updatePointElement(point);
@@ -2406,21 +1865,16 @@ const Workspace = (() => {
     if (commentTool !== "none") toggleCommentTool(commentTool);
     batchAssignMode = true;
     batchAssignPoints.clear();
-    renderBatchSideChoices();
     els.batchAssignBtn.classList.add("activeTool");
     els.batchAssignBar.classList.remove("hidden");
     updateBatchAssignBar();
-    setStatus("Batch Side: select points, then choose a Side/Segment.");
+    setStatus("Batch Side: tap points, then choose N, E, S, W, or Reset Auto.");
   }
 
   function toggleBatchPoint(point) {
     const currentDataId = els.dataSelect.value;
     if (point.dataId !== currentDataId) {
-      setStatus("Batch Side only selects points from the current Data Type.");
-      return;
-    }
-    if (project && project.sideMode === "flexible" && point.areaId !== currentAreaId) {
-      setStatus("Batch Side only selects points from the current Area.");
+      setStatus("Batch Side only selects points from the current Data type.");
       return;
     }
 
@@ -2458,11 +1912,7 @@ const Workspace = (() => {
       dataType.manual = false;
       dataType.ordered = true;
     }
-    if (project && project.sideMode === "flexible") {
-      recalculateAreaOrder(currentAreaId);
-    } else {
-      recalculateDataTypeOrder(dataId);
-    }
+    recalculateDataTypeOrder(dataId);
     const after = snapshotOrder(dataId);
     pushUndo({ type: "reorder", dataId, before, after });
     finishBatchAssign(`${batchAssignPoints.size} points assigned to ${side}.`);
@@ -2471,10 +1921,6 @@ const Workspace = (() => {
 
   function resetBatchToAuto() {
     if (!batchAssignPoints.size) return;
-    if (project && project.sideMode === "flexible") {
-      setStatus("Reset Auto is only available in Compass mode. Choose a Segment instead.");
-      return;
-    }
     const dataId = els.dataSelect.value;
     const before = snapshotOrder(dataId);
     const dataType = getDataType(dataId);
@@ -2536,11 +1982,7 @@ const Workspace = (() => {
       dataType.ordered = true;
     }
 
-    if (project && project.sideMode === "flexible") {
-      recalculateAreaOrder(contextPoint.areaId);
-    } else {
-      recalculateDataTypeOrder(dataId);
-    }
+    recalculateDataTypeOrder(dataId);
     const after = snapshotOrder(dataId);
 
     pushUndo({
@@ -2560,15 +2002,6 @@ const Workspace = (() => {
 
     els.sideModal.classList.add("hidden");
     scheduleAutoSave();
-  }
-
-  function recalculateOrderForPoint(point) {
-    if (!point) return;
-    if (project && project.sideMode === "flexible") {
-      recalculateAreaOrder(point.areaId);
-    } else {
-      recalculateDataTypeOrder(point.dataId);
-    }
   }
 
   function recalculateDataTypeOrder(dataId) {
@@ -2591,6 +2024,7 @@ const Workspace = (() => {
     manual order; adding/moving a point, assigning a side, or ordering again
     returns safely to the v6.2 geometric result.
   */
+  const SIDE_ORDER = ["N", "E", "S", "W", ""];
 
   function isSideLocked(dataType, side) {
     return !!(dataType &&
@@ -2624,10 +2058,8 @@ const Workspace = (() => {
 
   function getOrderedPoints(dataId) {
     const result = [];
-    const dataType = getDataType(dataId);
-    const sides = sidesForDataType(dataType).concat([""]);
 
-    sides.forEach(side => {
+    SIDE_ORDER.forEach(side => {
       orderedSidePoints(dataId, side).forEach((point, index) => {
         result.push({ point, side, seq: index + 1 });
       });
@@ -2649,19 +2081,14 @@ const Workspace = (() => {
     if (!dataType.lockedSides.includes(side)) dataType.lockedSides.push(side);
   }
 
-  function lockAreaSide(areaId, side) {
-    const area = getArea(areaId);
-    if (!area) return;
-
-    if (!Array.isArray(area.lockedSides)) area.lockedSides = [];
-
-    orderedAreaSidePoints(areaId, side).forEach((point, index) => {
-      point.manualSeq = index + 1;
-    });
-
-    if (!area.lockedSides.includes(side)) area.lockedSides.push(side);
-  }
-
+  /*
+    Orders a group of points along their principal axis (the direction of
+    greatest spread, found via a quick PCA on the point cloud) rather than
+    forcing a plain left-right or top-bottom coordinate sort. This handles
+    both straight walls and gently curved/arced walls with a single
+    algorithm, so the operator no longer has to pick a "straight" vs
+    "curved" method up front.
+  */
   function principalAxisSort(pointsList) {
     if (pointsList.length <= 1) return pointsList.slice();
     const cx = pointsList.reduce((sum, p) => sum + p.x, 0) / pointsList.length;
@@ -2683,6 +2110,9 @@ const Workspace = (() => {
     );
   }
 
+  // After the principal-axis sort, orient the run so it reads in the
+  // expected compass direction (e.g. clockwise on the North side means
+  // left→right) rather than possibly starting from either end.
   function orientCompassSide(sorted, side, direction) {
     if (sorted.length <= 1) return sorted;
     const clockwise = direction !== "counterclockwise";
@@ -2705,140 +2135,426 @@ const Workspace = (() => {
     if (!dataType.lockedSides.includes(side)) dataType.lockedSides.push(side);
   }
 
-  /* ================= Area mode: physical order is per (area, side),
-     shared across every Data Type; label seq is per (area, side, dataId). ================= */
+  /* ---------- Auto Sort Review ----------
+     Builds a before/after diff so the operator can see exactly which point
+     numbers would change (and any geometric warnings) before committing. */
 
-  function getArea(id) {
-    return areas.find(area => area.id === id);
+  function pointDisplayName(point, seqOverride = null) {
+    const dt = getDataType(point.dataId);
+    const seq = seqOverride == null ? (point.assignedSeq || "?") : seqOverride;
+    const side = point.assignedSide || "Unassigned";
+    return `${dt ? dt.name : "Data"} · ${side}${seq}`;
   }
 
-  function sidesForArea(area) {
-    if (!area) return [];
-    if (project && project.sideMode === "flexible") {
-      if (!Array.isArray(area.sideTags)) area.sideTags = [];
-      sharedSegments.forEach(name => { if (!area.sideTags.includes(name)) area.sideTags.push(name); });
-      area.sideTags = area.sideTags.filter(name => sharedSegments.includes(name));
-    }
-    return (area.sideTags || []).slice();
+  function mapSnapshotPoints(snapshot) {
+    const map = new Map();
+    (snapshot && snapshot.points ? snapshot.points : []).forEach(entry => map.set(entry.uid, entry));
+    return map;
   }
 
-  function isAreaSideLocked(area, side) {
-    return !!(area && Array.isArray(area.lockedSides) && area.lockedSides.includes(side));
-  }
+  // Review is about visible numbering, not internal ordering metadata:
+  // manualSeq may be rewritten while the displayed Side + sequence stays
+  // exactly the same, and those points must not appear under Changes.
+  function compareSnapshotChanges(beforeSnapshot, afterSnapshot) {
+    const beforeMap = mapSnapshotPoints(beforeSnapshot);
+    const afterMap = mapSnapshotPoints(afterSnapshot);
+    const changes = [];
+    afterMap.forEach((afterEntry, uid) => {
+      const beforeEntry = beforeMap.get(uid);
+      if (!beforeEntry) return;
 
-  function pointsInAreaSide(areaId, side) {
-    return points.filter(p =>
-      p.areaId === areaId &&
-      !p.excluded &&
-      (p.assignedSide || "") === side
-    );
-  }
+      const beforeSide = beforeEntry.assignedSide || "";
+      const afterSide = afterEntry.assignedSide || beforeSide;
+      const beforeSeq = beforeEntry.assignedSeq ?? null;
+      const afterSeq = afterEntry.assignedSeq ?? null;
+      const visibleNumberChanged = beforeSide !== afterSide || beforeSeq !== afterSeq;
+      if (!visibleNumberChanged) return;
 
-  function orderedAreaSidePoints(areaId, side) {
-    const area = getArea(areaId);
-    const inSide = pointsInAreaSide(areaId, side);
-    if (isAreaSideLocked(area, side)) {
-      return inSide.slice().sort((a, b) => (a.manualSeq || 0) - (b.manualSeq || 0));
-    }
-    return inSide;
-  }
-
-  function recalculateAreaOrder(areaId) {
-    const area = getArea(areaId);
-    if (!area) return;
-    const sides = sidesForArea(area).concat([""]);
-    sides.forEach(side => {
-      const countByDataId = {};
-      orderedAreaSidePoints(areaId, side).forEach(point => {
-        const count = (countByDataId[point.dataId] || 0) + 1;
-        countByDataId[point.dataId] = count;
-        point.assignedSide = side;
-        point.assignedSeq = count;
-        updatePointElement(point);
-      });
+      const point = points.find(p => p.uid === uid);
+      if (point) {
+        const dataType = getDataType(point.dataId);
+        changes.push({
+          uid,
+          point,
+          dataId: point.dataId,
+          dataTypeName: dataType ? dataType.name : "Data",
+          dataTypeColor: dataType ? dataType.color : "#667085",
+          side: afterSide,
+          beforeSide,
+          afterSide,
+          beforeSeq,
+          afterSeq
+        });
+      }
     });
-    refreshReviewIfOpen();
+    return changes;
   }
 
-  function angleAround(point, cx, cy) {
-    let angle = Math.atan2(point.y - cy, point.x - cx);
-    if (angle < 0) angle += 2 * Math.PI;
-    return angle;
+  function median(values) {
+    if (!values.length) return 0;
+    const sorted = values.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
-  function rotateAfterLargestGap(items, angleAccessor) {
-    if (items.length <= 1) return items.slice();
-    const sorted = items.slice().sort((a, b) => angleAccessor(a) - angleAccessor(b));
-    let maxGap = -1;
-    let seamIndex = 0;
-    for (let i = 0; i < sorted.length; i += 1) {
-      const current = angleAccessor(sorted[i]);
-      const next = angleAccessor(sorted[(i + 1) % sorted.length]) + (i === sorted.length - 1 ? 2 * Math.PI : 0);
-      const gap = next - current;
-      if (gap > maxGap) { maxGap = gap; seamIndex = (i + 1) % sorted.length; }
+  function tagWarningDataType(warning, point) {
+    if (point) {
+      const dataType = getDataType(point.dataId);
+      warning.dataId = point.dataId;
+      warning.dataTypeName = dataType ? dataType.name : "Data";
+      warning.dataTypeColor = dataType ? dataType.color : "#667085";
     }
-    return sorted.slice(seamIndex).concat(sorted.slice(0, seamIndex));
+    return warning;
   }
 
-  function orientSegmentPoints(sorted, cx, cy, clockwise) {
-    if (sorted.length <= 1) return sorted;
-    const angles = sorted.map(p => angleAround(p, cx, cy));
-    let forward = 0;
-    for (let i = 1; i < angles.length; i += 1) {
-      let delta = angles[i] - angles[i - 1];
-      while (delta > Math.PI) delta -= 2 * Math.PI;
-      while (delta < -Math.PI) delta += 2 * Math.PI;
-      forward += delta;
+  function collectGroupWarnings(groups) {
+    const warnings = [];
+    const all = groups.flatMap(group => group.points);
+    // Nearly overlapping points, regardless of group.
+    for (let i = 0; i < all.length; i += 1) {
+      for (let j = i + 1; j < all.length; j += 1) {
+        const distance = Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y);
+        if (distance < 10) {
+          warnings.push(tagWarningDataType({ level: "high", uid: all[i].uid, text: `${pointDisplayName(all[i])} is almost overlapping another point.` }, all[i]));
+          break;
+        }
+      }
     }
-    const forwardIsClockwise = forward >= 0; // screen Y grows downward
-    return forwardIsClockwise === clockwise ? sorted : sorted.slice().reverse();
+    groups.forEach(group => {
+      if (group.points.length === 1) {
+        warnings.push(tagWarningDataType({ level: "info", uid: group.points[0].uid, text: `${group.label} contains only one point.` }, group.points[0]));
+        return;
+      }
+      const cx = group.points.reduce((sum, p) => sum + p.x, 0) / group.points.length;
+      const cy = group.points.reduce((sum, p) => sum + p.y, 0) / group.points.length;
+      const distances = group.points.map(p => Math.hypot(p.x - cx, p.y - cy));
+      const med = median(distances);
+      if (med > 0) {
+        group.points.forEach((point, index) => {
+          if (distances[index] > Math.max(30, med * 2.6)) {
+            warnings.push(tagWarningDataType({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is far from the other points in ${group.label}. Check its Side manually.` }, point));
+          }
+        });
+      }
+      const ordered = principalAxisSort(group.points);
+      const gaps = [];
+      for (let i = 1; i < ordered.length; i += 1) gaps.push(Math.hypot(ordered[i].x - ordered[i-1].x, ordered[i].y - ordered[i-1].y));
+      const typicalGap = median(gaps);
+      if (typicalGap > 0) {
+        gaps.forEach((gap, index) => {
+          if (gap > typicalGap * 3.5 && gap > 40) {
+            warnings.push(tagWarningDataType({ level: "check", uid: ordered[index + 1].uid, text: `${group.label} has an unusually large gap. Check whether a point belongs to another Side.` }, ordered[index + 1]));
+          }
+        });
+      }
+    });
+    return warnings.slice(0, 30);
   }
 
-  function autoSortArea(areaId, direction = "clockwise", targetSides = null) {
-    const area = getArea(areaId);
-    if (!area) return;
-    const allAreaPoints = points.filter(p => p.areaId === areaId && !p.excluded && p.assignedSide);
-    if (!allAreaPoints.length) return;
-    const cx = allAreaPoints.reduce((sum, p) => sum + p.x, 0) / allAreaPoints.length;
-    const cy = allAreaPoints.reduce((sum, p) => sum + p.y, 0) / allAreaPoints.length;
-    const chosen = new Set(targetSides && targetSides.length ? targetSides : sidesForArea(area));
-    const segmentEntries = sidesForArea(area)
-      .filter(side => chosen.has(side) && pointsInAreaSide(areaId, side).length)
-      .map(side => {
-        const group = pointsInAreaSide(areaId, side);
-        const centroid = {
-          x: group.reduce((sum, p) => sum + p.x, 0) / group.length,
-          y: group.reduce((sum, p) => sum + p.y, 0) / group.length
-        };
-        return { side, group, centroid, angle: angleAround(centroid, cx, cy) };
-      });
-    let orderedEntries = rotateAfterLargestGap(segmentEntries, entry => entry.angle);
-    const clockwise = direction !== "counterclockwise";
-    if (!clockwise) orderedEntries = orderedEntries.slice().reverse();
+  function buildCompassSortReview(targetDataTypes, targets, before, after, direction) {
+    const changes = [];
+    targetDataTypes.forEach(dt => changes.push(...compareSnapshotChanges(before[dt.id], after[dt.id])));
+    const groups = targets.map(({ dt, side }) => ({ label: `${dt.name} · ${side}`, points: pointsInSide(dt.id, side) }));
+    const checked = groups.reduce((sum, group) => sum + group.points.length, 0);
+    return { title: "Auto Sort Review", context: `${direction === "clockwise" ? "Clockwise" : "Counterclockwise"} · Side assignments unchanged`, checked, changes, warnings: collectGroupWarnings(groups) };
+  }
 
-    // Reorder only selected segments; untouched segments remain in their existing slots.
-    const selectedOrder = orderedEntries.map(entry => entry.side);
-    let selectedIndex = 0;
-    area.sideTags = sidesForArea(area).map(side => chosen.has(side) && selectedOrder.includes(side)
-      ? selectedOrder[selectedIndex++]
-      : side);
-
-    if (!Array.isArray(area.lockedSides)) area.lockedSides = [];
-    orderedEntries.forEach(entry => {
-      let sorted = principalAxisSort(entry.group);
-      sorted = orientSegmentPoints(sorted, cx, cy, clockwise);
-      sorted.forEach((point, index) => { point.manualSeq = index + 1; });
-      if (!area.lockedSides.includes(entry.side)) area.lockedSides.push(entry.side);
+  function clearAutoSortReviewMarkers() {
+    activeSortReviewUid = null;
+    els.drawingArea.querySelectorAll(".point.sort-review-changed, .point.sort-review-warning, .point.sort-review-active").forEach(element => {
+      element.classList.remove("sort-review-changed", "sort-review-warning", "sort-review-warning-high", "sort-review-warning-check", "sort-review-active", "sort-review-flash");
+      delete element.dataset.sortReviewLabel;
+      delete element.dataset.sortReviewWarning;
     });
   }
 
-  function sortPointsByAngle(pointsList, clockwise) {
-    if (pointsList.length <= 1) return pointsList.slice();
-    const cx = pointsList.reduce((sum, p) => sum + p.x, 0) / pointsList.length;
-    const cy = pointsList.reduce((sum, p) => sum + p.y, 0) / pointsList.length;
-    let ordered = rotateAfterLargestGap(pointsList, p => angleAround(p, cx, cy));
-    if (!clockwise) ordered = ordered.slice().reverse();
-    return ordered;
+  function applyAutoSortReviewMarkers(review) {
+    clearAutoSortReviewMarkers();
+    if (!review) return;
+
+    if (sortReviewShowChanges) {
+      review.changes.forEach(change => {
+        const element = findPointElement(change.uid);
+        if (!element) return;
+        element.classList.add("sort-review-changed");
+        element.dataset.sortReviewLabel = `${change.beforeSide || change.side}${change.beforeSeq ?? "?"} → ${change.afterSide || change.side}${change.afterSeq ?? "?"}`;
+      });
+    }
+
+    if (sortReviewShowWarnings) {
+      review.warnings.forEach(warning => {
+        if (!warning.uid) return;
+        const element = findPointElement(warning.uid);
+        if (!element) return;
+        element.classList.add("sort-review-warning");
+        element.classList.toggle("sort-review-warning-high", warning.level === "high");
+        element.classList.toggle("sort-review-warning-check", warning.level === "check");
+        element.dataset.sortReviewWarning = warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i";
+      });
+    }
+  }
+
+  function setReviewToggle(button, active) {
+    if (!button) return;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+    button.textContent = active ? "Shown on drawing" : "Hidden on drawing";
+  }
+
+  function formatReviewCode(side, seq) {
+    const cleanSide = side || "?";
+    const cleanSeq = seq ?? "?";
+    return `${cleanSide}-${cleanSeq}`;
+  }
+
+  function flashReviewElement(element) {
+    if (!element) return;
+    element.classList.add("sort-review-active");
+    void element.offsetWidth;
+    element.classList.add("sort-review-flash");
+    setTimeout(() => element.classList.remove("sort-review-flash"), 1000);
+  }
+
+  function focusReviewPoint(uid, sourceRow) {
+    const point = points.find(p => p.uid === uid);
+    if (!point) return;
+    const element = findPointElement(uid);
+    if (!element) return;
+
+    activeSortReviewUid = uid;
+    document.querySelectorAll(".sortReviewRow.selectedReviewRow, .sortWarningRow.selectedReviewRow").forEach(row => row.classList.remove("selectedReviewRow"));
+    if (sourceRow) sourceRow.classList.add("selectedReviewRow");
+    els.drawingArea.querySelectorAll(".point.sort-review-active").forEach(item => item.classList.remove("sort-review-active", "sort-review-flash"));
+
+    // Both Number Changes and Warning rows move the viewport to the point.
+    // The point label itself stays at its drawing coordinates and only
+    // receives a visual flash after the viewport finishes moving.
+    const wrapper = els.drawingWrapper;
+    const targetLeft = Math.max(0, point.x * zoomLevel - wrapper.clientWidth / 2);
+    const targetTop = Math.max(0, point.y * zoomLevel - wrapper.clientHeight / 2);
+    if (typeof wrapper.scrollTo === "function") {
+      wrapper.scrollTo({ left: targetLeft, top: targetTop, behavior: "smooth" });
+    } else {
+      wrapper.scrollLeft = targetLeft;
+      wrapper.scrollTop = targetTop;
+    }
+    setTimeout(() => flashReviewElement(element), 340);
+  }
+
+  function createReviewStat(value, label, tone) {
+    return `<span class="sortReviewStat ${tone || ""}"><strong>${value}</strong><small>${label}</small></span>`;
+  }
+
+  function renderAutoSortReviewFilters(review) {
+    if (!els.autoSortReviewFilters) return;
+    const typeMap = new Map();
+    (review.changes || []).forEach(change => {
+      if (!typeMap.has(change.dataId)) {
+        typeMap.set(change.dataId, {
+          id: change.dataId,
+          name: change.dataTypeName || "Data",
+          color: change.dataTypeColor || "#667085",
+          count: 0
+        });
+      }
+      typeMap.get(change.dataId).count += 1;
+    });
+
+    const types = Array.from(typeMap.values());
+    if (autoSortReviewFilter !== "all" && !typeMap.has(autoSortReviewFilter)) {
+      autoSortReviewFilter = "all";
+    }
+
+    els.autoSortReviewFilters.innerHTML = "";
+    els.autoSortReviewFilters.classList.toggle("hidden", types.length <= 1);
+    if (types.length <= 1) return;
+
+    const addChip = (value, label, color, count) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "sortReviewFilterChip" + (autoSortReviewFilter === value ? " active" : "");
+      chip.dataset.filter = value;
+      chip.innerHTML = `${color ? `<span class="sortReviewFilterDot" style="background:${escapeHTML(color)}"></span>` : ""}<span>${escapeHTML(label)}</span><small>${count}</small>`;
+      chip.addEventListener("click", () => {
+        autoSortReviewFilter = value;
+        applyAutoSortReviewFilter();
+        renderAutoSortReviewFilters(review);
+      });
+      els.autoSortReviewFilters.appendChild(chip);
+    };
+
+    addChip("all", "All", "", review.changes.length);
+    types.forEach(type => addChip(type.id, type.name, type.color, type.count));
+  }
+
+  function applyAutoSortReviewFilter() {
+    if (!els.autoSortReviewChanges) return;
+    els.autoSortReviewChanges.querySelectorAll(".sortReviewDataTypeGroup").forEach(group => {
+      group.classList.toggle("hidden", autoSortReviewFilter !== "all" && group.dataset.dataId !== autoSortReviewFilter);
+    });
+    if (els.autoSortReviewWarnings) {
+      els.autoSortReviewWarnings.querySelectorAll(".sortReviewDataTypeGroup").forEach(group => {
+        group.classList.toggle("hidden", autoSortReviewFilter !== "all" && group.dataset.dataId !== autoSortReviewFilter);
+      });
+    }
+  }
+
+  function buildWarningRow(warning) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `sortWarningRow ${warning.level}`;
+    row.innerHTML = `<span class="sortWarningIcon">${warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i"}</span><span class="sortReviewRowBody"><strong>${escapeHTML(warning.text)}</strong><small>${warning.level === "high" ? "High attention" : warning.level === "check" ? "Please verify manually" : "Information"}</small></span>${warning.uid ? '<span class="sortReviewLocate">Locate</span>' : ""}`;
+    if (warning.uid) row.addEventListener("click", () => focusReviewPoint(warning.uid, row));
+    else row.disabled = true;
+    return row;
+  }
+
+  function openAutoSortReview(review) {
+    if (!els.autoSortReviewModal) return;
+    const unchanged = Math.max(0, review.checked - review.changes.length);
+    sortReviewShowChanges = true;
+    sortReviewShowWarnings = true;
+    setReviewToggle(els.toggleSortReviewChangesBtn, true);
+    setReviewToggle(els.toggleSortReviewWarningsBtn, true);
+
+    els.autoSortReviewSummary.innerHTML = `
+      <div class="sortReviewTitleRow"><strong>${escapeHTML(review.title)}</strong><span class="sortReviewReadyBadge">Ready to review</span></div>
+      <span class="sortReviewContext">${escapeHTML(review.context)}</span>
+      <div class="sortReviewStats">
+        ${createReviewStat(review.checked, "Checked", "neutral")}
+        ${createReviewStat(review.changes.length, "Changed", "changed")}
+        ${createReviewStat(unchanged, "Unchanged", "safe")}
+        ${createReviewStat(review.warnings.length, "Warnings", review.warnings.length ? "warning" : "safe")}
+      </div>
+      <p class="sortReviewSafety"><span>✓</span><span><strong>Assignments protected.</strong> Auto Sort did not change any Side.</span></p>`;
+
+    els.autoSortReviewChanges.innerHTML = review.changes.length ? "" : '<div class="sortReviewEmpty success"><span>✓</span><strong>No point numbers would change.</strong></div>';
+    if (review.changes.length) {
+      const groupedChanges = new Map();
+      review.changes.forEach(change => {
+        const key = change.dataId || "unknown";
+        if (!groupedChanges.has(key)) groupedChanges.set(key, []);
+        groupedChanges.get(key).push(change);
+      });
+
+      const orderedGroupKeys = [
+        ...dataTypes.map(dataType => dataType.id).filter(id => groupedChanges.has(id)),
+        ...Array.from(groupedChanges.keys()).filter(id => !dataTypes.some(dataType => dataType.id === id))
+      ];
+
+      let globalIndex = 0;
+      orderedGroupKeys.forEach(dataId => {
+        const groupChanges = groupedChanges.get(dataId);
+        const dataType = getDataType(dataId);
+        const group = document.createElement("section");
+        group.className = "sortReviewDataTypeGroup";
+        group.dataset.dataId = dataId;
+
+        const header = document.createElement("div");
+        header.className = "sortReviewDataTypeHeader";
+        const dot = document.createElement("span");
+        dot.className = "sortReviewDataTypeDot";
+        dot.style.backgroundColor = dataType ? dataType.color : (groupChanges[0].dataTypeColor || "#667085");
+        const name = document.createElement("strong");
+        name.textContent = dataType ? dataType.name : (groupChanges[0].dataTypeName || "Data");
+        const count = document.createElement("small");
+        count.textContent = `${groupChanges.length} change${groupChanges.length === 1 ? "" : "s"}`;
+        header.append(dot, name, count);
+        group.appendChild(header);
+
+        const rows = document.createElement("div");
+        rows.className = "sortReviewDataTypeRows";
+        groupChanges.forEach(change => {
+          globalIndex += 1;
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "sortReviewRow";
+          row.dataset.reviewUid = change.uid;
+          const beforeCode = formatReviewCode(change.beforeSide || change.side, change.beforeSeq);
+          const afterCode = formatReviewCode(change.afterSide || change.side, change.afterSeq);
+          row.innerHTML = `<span class="sortReviewRowIndex">${globalIndex}</span><span class="sortReviewRowBody"><strong>${escapeHTML(beforeCode)} <i>→</i> ${escapeHTML(afterCode)}</strong><small>Click to locate this point</small></span><span class="sortReviewLocate">Locate</span>`;
+          row.addEventListener("click", () => focusReviewPoint(change.uid, row));
+          rows.appendChild(row);
+        });
+        group.appendChild(rows);
+        els.autoSortReviewChanges.appendChild(group);
+      });
+    }
+
+    renderAutoSortReviewFilters(review);
+
+    els.autoSortReviewWarnings.innerHTML = review.warnings.length ? "" : '<div class="sortReviewEmpty success"><span>✓</span><strong>No geometric warnings detected.</strong></div>';
+    if (review.warnings.length) {
+      const groupedWarnings = new Map();
+      review.warnings.forEach(warning => {
+        const key = warning.dataId || "unknown";
+        if (!groupedWarnings.has(key)) groupedWarnings.set(key, []);
+        groupedWarnings.get(key).push(warning);
+      });
+
+      const orderedWarningKeys = [
+        ...dataTypes.map(dataType => dataType.id).filter(id => groupedWarnings.has(id)),
+        ...Array.from(groupedWarnings.keys()).filter(id => !dataTypes.some(dataType => dataType.id === id))
+      ];
+
+      orderedWarningKeys.forEach(dataId => {
+        const groupWarnings = groupedWarnings.get(dataId);
+        const dataType = getDataType(dataId);
+        const group = document.createElement("section");
+        group.className = "sortReviewDataTypeGroup";
+        group.dataset.dataId = dataId;
+
+        const header = document.createElement("div");
+        header.className = "sortReviewDataTypeHeader";
+        const dot = document.createElement("span");
+        dot.className = "sortReviewDataTypeDot";
+        dot.style.backgroundColor = dataType ? dataType.color : (groupWarnings[0].dataTypeColor || "#667085");
+        const name = document.createElement("strong");
+        name.textContent = dataType ? dataType.name : (groupWarnings[0].dataTypeName || "Data");
+        const count = document.createElement("small");
+        count.textContent = `${groupWarnings.length} warning${groupWarnings.length === 1 ? "" : "s"}`;
+        header.append(dot, name, count);
+        group.appendChild(header);
+
+        const rows = document.createElement("div");
+        rows.className = "sortReviewDataTypeRows";
+        groupWarnings.forEach(warning => rows.appendChild(buildWarningRow(warning)));
+        group.appendChild(rows);
+
+        els.autoSortReviewWarnings.appendChild(group);
+      });
+    }
+
+    applyAutoSortReviewFilter();
+
+    els.autoSortReviewModal.classList.remove("hidden");
+    document.body.classList.add("sortReviewOpen");
+    applyAutoSortReviewMarkers(review);
+  }
+
+  function cancelPendingAutoSortReview() {
+    clearAutoSortReviewMarkers();
+    pendingAutoSortReview = null;
+    autoSortReviewFilter = "all";
+    document.body.classList.remove("sortReviewOpen");
+    if (els.autoSortReviewModal) els.autoSortReviewModal.classList.add("hidden");
+    setStatus("Auto Sort cancelled. No changes were applied.");
+  }
+
+  function applyPendingAutoSortReview() {
+    const pending = pendingAutoSortReview;
+    if (!pending) return;
+    pending.targetDataTypes.forEach(dataId => restoreOrder(dataId, pending.after[dataId]));
+    pushUndo({ type: "reorderBatch", before: pending.before, after: pending.after });
+    refreshAllPoints();
+    renderDataSelect(currentDataId());
+    clearAutoSortReviewMarkers();
+    pendingAutoSortReview = null;
+    autoSortReviewFilter = "all";
+    document.body.classList.remove("sortReviewOpen");
+    if (els.autoSortReviewModal) els.autoSortReviewModal.classList.add("hidden");
+    setStatus("Auto Sort applied. Side assignments were not changed.");
+    scheduleAutoSave();
   }
 
   function getBounds(typePoints) {
@@ -3105,20 +2821,11 @@ const Workspace = (() => {
     return els.dataSelect ? els.dataSelect.value : null;
   }
 
-  function isAreaProject() {
-    return !!(project && project.sideMode === "flexible");
-  }
-
   function openAutoSortModal() {
     if (!els.autoSortModal) return;
 
-    if (isAreaProject()) {
-      openAreaAutoSortModal();
-      return;
-    }
-
     const selectedDataId = lastAutoSortDataId || currentDataId() || (dataTypes[0] && dataTypes[0].id);
-    els.autoSortDataTypeLabel.textContent = "Data Type";
+    if (els.autoSortDataTypeLabel) els.autoSortDataTypeLabel.textContent = "Data Type";
     els.autoSortDataType.innerHTML = "";
     const allTypesOption = document.createElement("option");
     allTypesOption.value = "__all__";
@@ -3135,689 +2842,61 @@ const Workspace = (() => {
     if (selectedDataId === "__all__" || (selectedDataId && getDataType(selectedDataId))) {
       els.autoSortDataType.value = selectedDataId;
     }
-
-    populateAutoSortSideOptions();
+    els.autoSortSide.value = ["__all__", "N", "E", "S", "W"].includes(lastAutoSortSide)
+      ? lastAutoSortSide
+      : "__all__";
 
     els.autoSortDirectionChoices.forEach(choice => {
       choice.checked = choice.value === lastAutoSortDirection;
     });
 
-    els.autoSortMethodChoices.forEach(choice => {
-      choice.checked = choice.value === lastAutoSortMethod;
-    });
-
-    if (els.autoSortFlexibleDirectionField) els.autoSortFlexibleDirectionField.classList.add("hidden");
-    if (els.autoSortSideDropdownField) els.autoSortSideDropdownField.classList.remove("hidden");
-    if (els.autoSortSidesField) els.autoSortSidesField.classList.add("hidden");
-    updateAutoSortDirectionFieldVisibility();
-
     els.autoSortModal.classList.remove("hidden");
-  }
-
-  function sidesForDataType(dataType) {
-    if (!dataType) return [];
-    return ["N", "E", "S", "W"];
-  }
-
-  function populateAutoSortSideOptions() {
-    const dataSelection = els.autoSortDataType.value;
-    const previousSide = els.autoSortSide.value;
-    const dataType = dataSelection === "__all__" ? null : getDataType(dataSelection);
-
-    els.autoSortSide.innerHTML = "";
-    const allOption = document.createElement("option");
-    allOption.value = "__all__";
-    allOption.textContent = "All Sides";
-    els.autoSortSide.appendChild(allOption);
-
-    // "All Data Types" can't offer specific side letters that make sense
-    // across every type at once, so it only offers "All Sides".
-    const sides = dataSelection === "__all__" ? [] : sidesForDataType(dataType);
-    sides.forEach(side => {
-      const option = document.createElement("option");
-      option.value = side;
-      option.textContent = side;
-      els.autoSortSide.appendChild(option);
-    });
-
-    els.autoSortSide.value = sides.includes(previousSide) || previousSide === "__all__"
-      ? (sides.includes(previousSide) ? previousSide : "__all__")
-      : "__all__";
-
-    updateAutoSortDirectionFieldVisibility();
-  }
-
-  function updateAutoSortDirectionFieldVisibility() {
-    if (els.autoSortCompassDirectionField) els.autoSortCompassDirectionField.classList.remove("hidden");
-    if (els.autoSortFlexibleDirectionField) els.autoSortFlexibleDirectionField.classList.add("hidden");
   }
 
   function closeAutoSortModal() {
     if (els.autoSortModal) els.autoSortModal.classList.add("hidden");
   }
 
+  // Auto Sort no longer applies immediately: it computes the new order,
+  // silently reverts it, and shows an Auto Sort Review dialog listing every
+  // point whose visible Side+number would change plus any geometric
+  // warnings. The change is only committed (as a single Undo/Redo action)
+  // if the operator presses "Apply Auto Sort".
   function confirmAutoSort() {
-    if (isAreaProject()) {
-      confirmAreaAutoSort();
-      return;
-    }
     const dataSelection = els.autoSortDataType.value;
     const sideSelection = els.autoSortSide.value;
     const selectedDirection = els.autoSortDirectionChoices.find(choice => choice.checked);
     const direction = selectedDirection ? selectedDirection.value : "clockwise";
     const targetDataTypes = dataSelection === "__all__" ? dataTypes.slice() : [getDataType(dataSelection)].filter(Boolean);
+    const targetSides = sideSelection === "__all__" ? ["N", "E", "S", "W"] : [sideSelection];
     if (!targetDataTypes.length) { setStatus("Choose a valid data type."); return; }
     const targets = [];
-    targetDataTypes.forEach(dt => {
-      const targetSides = sideSelection === "__all__" ? sidesForDataType(dt) : [sideSelection];
-      targetSides.forEach(side => { if (pointsInSide(dt.id, side).length) targets.push({ dt, side }); });
-    });
+    targetDataTypes.forEach(dt => targetSides.forEach(side => { if (pointsInSide(dt.id, side).length) targets.push({ dt, side }); }));
     if (!targets.length) { setStatus("No matching assigned points to sort."); return; }
 
     closeAutoSortModal();
     lastAutoSortDataId = dataSelection;
     lastAutoSortSide = sideSelection;
     lastAutoSortDirection = direction;
+
     const before = {};
     targetDataTypes.forEach(dt => { before[dt.id] = snapshotOrder(dt.id); });
     targets.forEach(({ dt, side }) => autoSortSide(dt.id, side, direction));
     targetDataTypes.forEach(dt => { dt.direction = direction; recalculateDataTypeOrder(dt.id); });
     const after = {};
     targetDataTypes.forEach(dt => { after[dt.id] = snapshotOrder(dt.id); });
+
     const review = buildCompassSortReview(targetDataTypes, targets, before, after, direction);
     targetDataTypes.forEach(dt => restoreOrder(dt.id, before[dt.id]));
-    pendingAutoSortReview = { mode: "compass", before, after, targetDataTypes: targetDataTypes.map(dt => dt.id), review };
+
+    pendingAutoSortReview = { before, after, targetDataTypes: targetDataTypes.map(dt => dt.id), review };
     openAutoSortReview(review);
-  }
-
-  /* ---------- Auto Sort: area mode ----------
-     Physical order belongs to the Area (shared across every Data Type on
-     that side), so this picks an Area rather than a Data Type. */
-
-  function openAreaAutoSortModal() {
-    const selectedAreaId = lastAutoSortAreaId || currentAreaId || (areas[0] && areas[0].id);
-    els.autoSortDataTypeLabel.textContent = "Area";
-    els.autoSortDataType.innerHTML = "";
-
-    areas.forEach(area => {
-      const option = document.createElement("option");
-      option.value = area.id;
-      option.textContent = area.name;
-      els.autoSortDataType.appendChild(option);
-    });
-
-    if (selectedAreaId && getArea(selectedAreaId)) {
-      els.autoSortDataType.value = selectedAreaId;
-    }
-
-    if (els.autoSortSideDropdownField) els.autoSortSideDropdownField.classList.add("hidden");
-    if (els.autoSortSidesField) els.autoSortSidesField.classList.remove("hidden");
-    populateAreaAutoSortSideOptions();
-
-    els.autoSortMethodChoices.forEach(choice => {
-      choice.checked = choice.value === lastAutoSortMethod;
-    });
-    els.autoSortFlexibleDirectionChoices.forEach(choice => {
-      choice.checked = choice.value === lastAutoSortFlexibleDirection;
-    });
-    els.autoSortDirectionChoices.forEach(choice => {
-      choice.checked = choice.value === lastAutoSortDirection;
-    });
-
-    updateAutoSortDirectionFieldVisibility();
-    els.autoSortModal.classList.remove("hidden");
-  }
-
-  function populateAreaAutoSortSideOptions() {
-    const area = getArea(els.autoSortDataType.value);
-    const previouslyChecked = new Set(
-      Array.from(els.autoSortSidesList.querySelectorAll("input:checked")).map(cb => cb.value)
-    );
-
-    els.autoSortSidesList.innerHTML = "";
-    const sides = sidesForArea(area);
-
-    if (!sides.length) {
-      els.autoSortSidesList.innerHTML = '<span class="hint">This area has no sides yet.</span>';
-      return;
-    }
-
-    sides.forEach(side => {
-      const label = document.createElement("label");
-      label.className = "radioChoice";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.value = side;
-      // Default: whichever side was checked last time, or (first time) this
-      // area's currently-active side — same behaviour as the prototype.
-      checkbox.checked = previouslyChecked.size
-        ? previouslyChecked.has(side)
-        : true;
-      const span = document.createElement("span");
-      span.textContent = side;
-      label.appendChild(checkbox);
-      label.appendChild(span);
-      els.autoSortSidesList.appendChild(label);
-    });
-  }
-
-  function confirmAreaAutoSort() {
-    const areaId = els.autoSortDataType.value;
-    const area = getArea(areaId);
-    const targetSides = Array.from(els.autoSortSidesList.querySelectorAll("input:checked")).map(cb => cb.value);
-    const selectedDirection = els.autoSortDirectionChoices.find(choice => choice.checked);
-    const direction = selectedDirection ? selectedDirection.value : "clockwise";
-    if (!area) { setStatus("Choose a valid area."); return; }
-    if (!targetSides.length) { setStatus("Choose at least one segment to sort."); return; }
-    const sidesWithPoints = targetSides.filter(side => pointsInAreaSide(area.id, side).length);
-    if (!sidesWithPoints.length) { setStatus("No matching assigned points to sort."); return; }
-
-    closeAutoSortModal();
-    lastAutoSortAreaId = areaId;
-    lastAutoSortDirection = direction;
-    const before = snapshotAreaOrder(area.id);
-    autoSortArea(area.id, direction, sidesWithPoints);
-    recalculateAreaOrder(area.id);
-    const after = snapshotAreaOrder(area.id);
-    const review = buildAreaSortReview(area, sidesWithPoints, before, after, direction);
-    restoreAreaOrder(area.id, before);
-    pendingAutoSortReview = { mode: "area", areaId: area.id, before, after, review };
-    openAutoSortReview(review);
-  }
-
-  function snapshotAreaOrder(areaId) {
-    const area = getArea(areaId);
-    return {
-      lockedSides: area && Array.isArray(area.lockedSides) ? area.lockedSides.slice() : [],
-      sideTags: area && Array.isArray(area.sideTags) ? area.sideTags.slice() : [],
-      points: points
-        .filter(p => p.areaId === areaId)
-        .map(p => ({
-          uid: p.uid,
-          manualSeq: p.manualSeq,
-          assignedSide: p.assignedSide,
-          assignedSeq: p.assignedSeq,
-          excluded: !!p.excluded
-        }))
-    };
-  }
-
-  function restoreAreaOrder(areaId, snap) {
-    const area = getArea(areaId);
-    if (area) {
-      area.lockedSides = Array.isArray(snap.lockedSides) ? snap.lockedSides.slice() : [];
-      if (Array.isArray(snap.sideTags)) area.sideTags = snap.sideTags.slice();
-    }
-
-    const byUid = {};
-    snap.points.forEach(entry => { byUid[entry.uid] = entry; });
-
-    points
-      .filter(p => p.areaId === areaId)
-      .forEach(p => {
-        const entry = byUid[p.uid];
-        if (entry) {
-          p.manualSeq = entry.manualSeq;
-          p.assignedSide = entry.assignedSide;
-          p.assignedSeq = entry.assignedSeq;
-          p.excluded = !!entry.excluded;
-        }
-      });
-
-    recalculateAreaOrder(areaId);
-    refreshAllPoints();
-  }
-
-  function pointDisplayName(point, seqOverride = null) {
-    const dt = getDataType(point.dataId);
-    const seq = seqOverride == null ? (point.assignedSeq || "?") : seqOverride;
-    const side = point.assignedSide || "Unassigned";
-    return `${dt ? dt.name : "Data"} · ${side}${seq}`;
-  }
-
-  function mapSnapshotPoints(snapshot) {
-    const map = new Map();
-    (snapshot && snapshot.points ? snapshot.points : []).forEach(entry => map.set(entry.uid, entry));
-    return map;
-  }
-
-  function compareSnapshotChanges(beforeSnapshot, afterSnapshot) {
-    const beforeMap = mapSnapshotPoints(beforeSnapshot);
-    const afterMap = mapSnapshotPoints(afterSnapshot);
-    const changes = [];
-    afterMap.forEach((afterEntry, uid) => {
-      const beforeEntry = beforeMap.get(uid);
-      if (!beforeEntry) return;
-
-      // Review is about visible numbering, not internal ordering metadata.
-      // manualSeq may be rewritten while the displayed Side + sequence stays
-      // exactly the same; those points must not appear under Changes.
-      const beforeSide = beforeEntry.assignedSide || "";
-      const afterSide = afterEntry.assignedSide || beforeSide;
-      const beforeSeq = beforeEntry.assignedSeq ?? null;
-      const afterSeq = afterEntry.assignedSeq ?? null;
-      const visibleNumberChanged = beforeSide !== afterSide || beforeSeq !== afterSeq;
-      if (!visibleNumberChanged) return;
-
-      const point = points.find(p => p.uid === uid);
-      if (point) {
-        const dataType = getDataType(point.dataId);
-        changes.push({
-          uid,
-          point,
-          dataId: point.dataId,
-          dataTypeName: dataType ? dataType.name : "Data",
-          dataTypeColor: dataType ? dataType.color : "#667085",
-          side: afterSide,
-          beforeSide,
-          afterSide,
-          beforeSeq,
-          afterSeq
-        });
-      }
-    });
-    return changes;
-  }
-
-  function median(values) {
-    if (!values.length) return 0;
-    const sorted = values.slice().sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-
-  function tagWarningDataType(warning, point) {
-    if (point) {
-      const dataType = getDataType(point.dataId);
-      warning.dataId = point.dataId;
-      warning.dataTypeName = dataType ? dataType.name : "Data";
-      warning.dataTypeColor = dataType ? dataType.color : "#667085";
-    }
-    return warning;
-  }
-
-  function collectGroupWarnings(groups) {
-    const warnings = [];
-    const all = groups.flatMap(group => group.points);
-    // Nearly overlapping points, regardless of group.
-    for (let i = 0; i < all.length; i += 1) {
-      for (let j = i + 1; j < all.length; j += 1) {
-        const distance = Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y);
-        if (distance < 10) {
-          warnings.push(tagWarningDataType({ level: "high", uid: all[i].uid, text: `${pointDisplayName(all[i])} is almost overlapping another point.` }, all[i]));
-          break;
-        }
-      }
-    }
-    groups.forEach(group => {
-      if (group.points.length === 1) {
-        warnings.push(tagWarningDataType({ level: "info", uid: group.points[0].uid, text: `${group.label} contains only one point.` }, group.points[0]));
-        return;
-      }
-      const cx = group.points.reduce((sum, p) => sum + p.x, 0) / group.points.length;
-      const cy = group.points.reduce((sum, p) => sum + p.y, 0) / group.points.length;
-      const distances = group.points.map(p => Math.hypot(p.x - cx, p.y - cy));
-      const med = median(distances);
-      if (med > 0) {
-        group.points.forEach((point, index) => {
-          if (distances[index] > Math.max(30, med * 2.6)) {
-            warnings.push(tagWarningDataType({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is far from the other points in ${group.label}. Check its Side/Segment manually.` }, point));
-          }
-        });
-      }
-      const ordered = principalAxisSort(group.points);
-      const gaps = [];
-      for (let i = 1; i < ordered.length; i += 1) gaps.push(Math.hypot(ordered[i].x - ordered[i-1].x, ordered[i].y - ordered[i-1].y));
-      const typicalGap = median(gaps);
-      if (typicalGap > 0) {
-        gaps.forEach((gap, index) => {
-          if (gap > typicalGap * 3.5 && gap > 40) {
-            warnings.push(tagWarningDataType({ level: "check", uid: ordered[index + 1].uid, text: `${group.label} has an unusually large gap. Check whether a point belongs to another Side/Segment.` }, ordered[index + 1]));
-          }
-        });
-      }
-    });
-    return warnings.slice(0, 30);
-  }
-
-  function buildCompassSortReview(targetDataTypes, targets, before, after, direction) {
-    const changes = [];
-    targetDataTypes.forEach(dt => changes.push(...compareSnapshotChanges(before[dt.id], after[dt.id])));
-    const groups = targets.map(({ dt, side }) => ({ label: `${dt.name} · ${side}`, points: pointsInSide(dt.id, side) }));
-    const checked = groups.reduce((sum, group) => sum + group.points.length, 0);
-    return { title: "Compass Auto Sort Review", areaLabel: null, context: `${direction === "clockwise" ? "Clockwise" : "Counterclockwise"} · Side assignments unchanged`, checked, changes, warnings: collectGroupWarnings(groups) };
-  }
-
-  function buildAreaSortReview(area, targetSides, before, after, direction) {
-    const changes = compareSnapshotChanges(before, after);
-    const groups = targetSides.map(side => ({ label: `${area.name} · ${side}`, points: pointsInAreaSide(area.id, side) }));
-    const checked = groups.reduce((sum, group) => sum + group.points.length, 0);
-    const beforeOrder = (before.sideTags || []).filter(side => targetSides.includes(side)).join(" → ");
-    const afterOrder = (after.sideTags || []).filter(side => targetSides.includes(side)).join(" → ");
-    const warnings = collectGroupWarnings(groups);
-    if (beforeOrder && afterOrder && beforeOrder !== afterOrder) {
-      warnings.unshift({ level: "info", uid: null, text: `Segment order preview: ${beforeOrder} → ${afterOrder}. No point was moved to another Segment.` });
-    }
-    return { title: "Segment Auto Sort Review", areaLabel: area.name, context: `${direction === "clockwise" ? "Clockwise" : "Counterclockwise"} · Segment assignments unchanged`, checked, changes, warnings };
-  }
-
-  function clearAutoSortReviewMarkers() {
-    activeSortReviewUid = null;
-    els.drawingArea.querySelectorAll(".point.sort-review-changed, .point.sort-review-warning, .point.sort-review-active").forEach(element => {
-      element.classList.remove("sort-review-changed", "sort-review-warning", "sort-review-warning-high", "sort-review-warning-check", "sort-review-active", "sort-review-flash");
-      delete element.dataset.sortReviewLabel;
-      delete element.dataset.sortReviewWarning;
-    });
-  }
-
-  function applyAutoSortReviewMarkers(review) {
-    clearAutoSortReviewMarkers();
-    if (!review) return;
-
-    if (sortReviewShowChanges) {
-      review.changes.forEach(change => {
-        const element = findPointElement(change.uid);
-        if (!element) return;
-        element.classList.add("sort-review-changed");
-        element.dataset.sortReviewLabel = `${change.beforeSide || change.side}${change.beforeSeq ?? "?"} → ${change.afterSide || change.side}${change.afterSeq ?? "?"}`;
-      });
-    }
-
-    if (sortReviewShowWarnings) {
-      review.warnings.forEach(warning => {
-        if (!warning.uid) return;
-        const element = findPointElement(warning.uid);
-        if (!element) return;
-        element.classList.add("sort-review-warning");
-        element.classList.toggle("sort-review-warning-high", warning.level === "high");
-        element.classList.toggle("sort-review-warning-check", warning.level === "check");
-        element.dataset.sortReviewWarning = warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i";
-      });
-    }
-  }
-
-  function setReviewToggle(button, active) {
-    if (!button) return;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-    button.textContent = active ? "Shown on drawing" : "Hidden on drawing";
-  }
-
-  function formatReviewCode(side, seq) {
-    const cleanSide = side || "?";
-    const cleanSeq = seq ?? "?";
-    return `${cleanSide}-${cleanSeq}`;
-  }
-
-  function flashReviewElement(element) {
-    if (!element) return;
-    element.classList.add("sort-review-active");
-    void element.offsetWidth;
-    element.classList.add("sort-review-flash");
-    setTimeout(() => element.classList.remove("sort-review-flash"), 1000);
-  }
-
-  function focusReviewPoint(uid, sourceRow, options = {}) {
-    const point = points.find(p => p.uid === uid);
-    if (!point) return;
-    const element = findPointElement(uid);
-    if (!element) return;
-
-    activeSortReviewUid = uid;
-    document.querySelectorAll(".sortReviewRow.selectedReviewRow, .sortWarningRow.selectedReviewRow").forEach(row => row.classList.remove("selectedReviewRow"));
-    if (sourceRow) sourceRow.classList.add("selectedReviewRow");
-    els.drawingArea.querySelectorAll(".point.sort-review-active").forEach(item => item.classList.remove("sort-review-active", "sort-review-flash"));
-
-    // Both Number Changes and Warning rows move the viewport to the point.
-    // The point label itself stays at its drawing coordinates and only receives
-    // a visual flash after the viewport finishes moving.
-
-    const wrapper = els.drawingWrapper;
-    const targetLeft = Math.max(0, point.x * zoomLevel - wrapper.clientWidth / 2);
-    const targetTop = Math.max(0, point.y * zoomLevel - wrapper.clientHeight / 2);
-    if (typeof wrapper.scrollTo === "function") {
-      wrapper.scrollTo({ left: targetLeft, top: targetTop, behavior: "smooth" });
-    } else {
-      wrapper.scrollLeft = targetLeft;
-      wrapper.scrollTop = targetTop;
-    }
-    setTimeout(() => flashReviewElement(element), 340);
-  }
-
-  function createReviewStat(value, label, tone) {
-    return `<span class="sortReviewStat ${tone || ""}"><strong>${value}</strong><small>${label}</small></span>`;
-  }
-
-  function renderAutoSortReviewFilters(review) {
-    if (!els.autoSortReviewFilters) return;
-    const typeMap = new Map();
-    (review.changes || []).forEach(change => {
-      if (!typeMap.has(change.dataId)) {
-        typeMap.set(change.dataId, {
-          id: change.dataId,
-          name: change.dataTypeName || "Data",
-          color: change.dataTypeColor || "#667085",
-          count: 0
-        });
-      }
-      typeMap.get(change.dataId).count += 1;
-    });
-
-    const types = Array.from(typeMap.values());
-    if (autoSortReviewFilter !== "all" && !typeMap.has(autoSortReviewFilter)) {
-      autoSortReviewFilter = "all";
-    }
-
-    els.autoSortReviewFilters.innerHTML = "";
-    els.autoSortReviewFilters.classList.toggle("hidden", types.length <= 1);
-    if (types.length <= 1) return;
-
-    const addChip = (value, label, color, count) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "sortReviewFilterChip" + (autoSortReviewFilter === value ? " active" : "");
-      chip.dataset.filter = value;
-      chip.innerHTML = `${color ? `<span class="sortReviewFilterDot" style="background:${escapeHTML(color)}"></span>` : ""}<span>${escapeHTML(label)}</span><small>${count}</small>`;
-      chip.addEventListener("click", () => {
-        autoSortReviewFilter = value;
-        applyAutoSortReviewFilter();
-        renderAutoSortReviewFilters(review);
-      });
-      els.autoSortReviewFilters.appendChild(chip);
-    };
-
-    addChip("all", "All", "", review.changes.length);
-    types.forEach(type => addChip(type.id, type.name, type.color, type.count));
-  }
-
-  function applyAutoSortReviewFilter() {
-    if (!els.autoSortReviewChanges) return;
-    els.autoSortReviewChanges.querySelectorAll(".sortReviewDataTypeGroup").forEach(group => {
-      group.classList.toggle("hidden", autoSortReviewFilter !== "all" && group.dataset.dataId !== autoSortReviewFilter);
-    });
-    if (els.autoSortReviewWarnings) {
-      els.autoSortReviewWarnings.querySelectorAll(".sortReviewDataTypeGroup").forEach(group => {
-        group.classList.toggle("hidden", autoSortReviewFilter !== "all" && group.dataset.dataId !== autoSortReviewFilter);
-      });
-    }
-  }
-
-  function buildWarningRow(warning) {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = `sortWarningRow ${warning.level}`;
-    row.innerHTML = `<span class="sortWarningIcon">${warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i"}</span><span class="sortReviewRowBody"><strong>${warning.text}</strong><small>${warning.level === "high" ? "High attention" : warning.level === "check" ? "Please verify manually" : "Information"}</small></span>${warning.uid ? '<span class="sortReviewLocate">Locate</span>' : ""}`;
-    if (warning.uid) row.addEventListener("click", () => focusReviewPoint(warning.uid, row));
-    else row.disabled = true;
-    return row;
-  }
-
-  function openAutoSortReview(review) {
-    if (!els.autoSortReviewModal) return;
-    const unchanged = Math.max(0, review.checked - review.changes.length);
-    sortReviewShowChanges = true;
-    sortReviewShowWarnings = true;
-    setReviewToggle(els.toggleSortReviewChangesBtn, true);
-    setReviewToggle(els.toggleSortReviewWarningsBtn, true);
-
-    els.autoSortReviewSummary.innerHTML = `
-      <div class="sortReviewTitleRow"><strong>${review.title}</strong><span class="sortReviewReadyBadge">Ready to review</span></div>
-      ${review.areaLabel ? `<span class="sortReviewArea"><small>AREA</small><strong>${review.areaLabel}</strong></span>` : ""}
-      <span class="sortReviewContext">${review.context}</span>
-      <div class="sortReviewStats">
-        ${createReviewStat(review.checked, "Checked", "neutral")}
-        ${createReviewStat(review.changes.length, "Changed", "changed")}
-        ${createReviewStat(unchanged, "Unchanged", "safe")}
-        ${createReviewStat(review.warnings.length, "Warnings", review.warnings.length ? "warning" : "safe")}
-      </div>
-      <p class="sortReviewSafety"><span>✓</span><span><strong>Assignments protected.</strong> Auto Sort did not change any Side or Segment.</span></p>`;
-
-    els.autoSortReviewChanges.innerHTML = review.changes.length ? "" : '<div class="sortReviewEmpty success"><span>✓</span><strong>No point numbers would change.</strong></div>';
-    if (review.changes.length) {
-      const groupedChanges = new Map();
-      review.changes.forEach(change => {
-        const key = change.dataId || "unknown";
-        if (!groupedChanges.has(key)) groupedChanges.set(key, []);
-        groupedChanges.get(key).push(change);
-      });
-
-      const orderedGroupKeys = [
-        ...dataTypes.map(dataType => dataType.id).filter(id => groupedChanges.has(id)),
-        ...Array.from(groupedChanges.keys()).filter(id => !dataTypes.some(dataType => dataType.id === id))
-      ];
-
-      let globalIndex = 0;
-      orderedGroupKeys.forEach(dataId => {
-        const groupChanges = groupedChanges.get(dataId);
-        const dataType = getDataType(dataId);
-        const group = document.createElement("section");
-        group.className = "sortReviewDataTypeGroup";
-        group.dataset.dataId = dataId;
-
-        const header = document.createElement("div");
-        header.className = "sortReviewDataTypeHeader";
-        const dot = document.createElement("span");
-        dot.className = "sortReviewDataTypeDot";
-        dot.style.backgroundColor = dataType ? dataType.color : (groupChanges[0].dataTypeColor || "#667085");
-        const name = document.createElement("strong");
-        name.textContent = dataType ? dataType.name : (groupChanges[0].dataTypeName || "Data");
-        const count = document.createElement("small");
-        count.textContent = `${groupChanges.length} change${groupChanges.length === 1 ? "" : "s"}`;
-        header.append(dot, name, count);
-        group.appendChild(header);
-
-        const rows = document.createElement("div");
-        rows.className = "sortReviewDataTypeRows";
-        groupChanges.forEach(change => {
-          globalIndex += 1;
-          const row = document.createElement("button");
-          row.type = "button";
-          row.className = "sortReviewRow";
-          row.dataset.reviewUid = change.uid;
-          const beforeCode = formatReviewCode(change.beforeSide || change.side, change.beforeSeq);
-          const afterCode = formatReviewCode(change.afterSide || change.side, change.afterSeq);
-          row.innerHTML = `<span class="sortReviewRowIndex">${globalIndex}</span><span class="sortReviewRowBody"><strong>${beforeCode} <i>→</i> ${afterCode}</strong><small>Click to locate this point</small></span><span class="sortReviewLocate">Locate</span>`;
-          row.addEventListener("click", () => focusReviewPoint(change.uid, row));
-          rows.appendChild(row);
-        });
-        group.appendChild(rows);
-        els.autoSortReviewChanges.appendChild(group);
-      });
-    }
-
-    renderAutoSortReviewFilters(review);
-
-    els.autoSortReviewWarnings.innerHTML = review.warnings.length ? "" : '<div class="sortReviewEmpty success"><span>✓</span><strong>No geometric warnings detected.</strong></div>';
-    if (review.warnings.length) {
-      // Warnings without a data type (e.g. a Segment-order preview note) have
-      // no single point to attribute to a color, so they render ungrouped
-      // above the per-Data-Type sections.
-      review.warnings.filter(warning => !warning.dataId).forEach(warning => {
-        els.autoSortReviewWarnings.appendChild(buildWarningRow(warning));
-      });
-
-      const groupedWarnings = new Map();
-      review.warnings.filter(warning => warning.dataId).forEach(warning => {
-        if (!groupedWarnings.has(warning.dataId)) groupedWarnings.set(warning.dataId, []);
-        groupedWarnings.get(warning.dataId).push(warning);
-      });
-
-      const orderedWarningKeys = [
-        ...dataTypes.map(dataType => dataType.id).filter(id => groupedWarnings.has(id)),
-        ...Array.from(groupedWarnings.keys()).filter(id => !dataTypes.some(dataType => dataType.id === id))
-      ];
-
-      orderedWarningKeys.forEach(dataId => {
-        const groupWarnings = groupedWarnings.get(dataId);
-        const dataType = getDataType(dataId);
-        const group = document.createElement("section");
-        group.className = "sortReviewDataTypeGroup";
-        group.dataset.dataId = dataId;
-
-        const header = document.createElement("div");
-        header.className = "sortReviewDataTypeHeader";
-        const dot = document.createElement("span");
-        dot.className = "sortReviewDataTypeDot";
-        dot.style.backgroundColor = dataType ? dataType.color : (groupWarnings[0].dataTypeColor || "#667085");
-        const name = document.createElement("strong");
-        name.textContent = dataType ? dataType.name : (groupWarnings[0].dataTypeName || "Data");
-        const count = document.createElement("small");
-        count.textContent = `${groupWarnings.length} warning${groupWarnings.length === 1 ? "" : "s"}`;
-        header.append(dot, name, count);
-        group.appendChild(header);
-
-        const rows = document.createElement("div");
-        rows.className = "sortReviewDataTypeRows";
-        groupWarnings.forEach(warning => rows.appendChild(buildWarningRow(warning)));
-        group.appendChild(rows);
-
-        els.autoSortReviewWarnings.appendChild(group);
-      });
-    }
-
-    applyAutoSortReviewFilter();
-
-    els.autoSortReviewModal.classList.remove("hidden");
-    document.body.classList.add("sortReviewOpen");
-    applyAutoSortReviewMarkers(review);
-  }
-
-  function cancelPendingAutoSortReview() {
-    clearAutoSortReviewMarkers();
-    pendingAutoSortReview = null;
-    autoSortReviewFilter = "all";
-    document.body.classList.remove("sortReviewOpen");
-    if (els.autoSortReviewModal) els.autoSortReviewModal.classList.add("hidden");
-    setStatus("Auto Sort cancelled. No changes were applied.");
-  }
-
-  function applyPendingAutoSortReview() {
-    const pending = pendingAutoSortReview;
-    if (!pending) return;
-    if (pending.mode === "area") {
-      restoreAreaOrder(pending.areaId, pending.after);
-      pushUndo({ type: "reorderAreaBatch", areaId: pending.areaId, before: pending.before, after: pending.after });
-    } else {
-      pending.targetDataTypes.forEach(dataId => restoreOrder(dataId, pending.after[dataId]));
-      pushUndo({ type: "reorderBatch", before: pending.before, after: pending.after });
-      refreshAllPoints();
-      renderDataSelect(currentDataId());
-    }
-    clearAutoSortReviewMarkers();
-    pendingAutoSortReview = null;
-    autoSortReviewFilter = "all";
-    document.body.classList.remove("sortReviewOpen");
-    els.autoSortReviewModal.classList.add("hidden");
-    setStatus("Auto Sort applied. Side and Segment assignments were not changed.");
-    scheduleAutoSave();
   }
 
   function openSetPosition(point) {
     setPositionPoint = point;
     const side = point.assignedSide || "";
-    const list = (project && project.sideMode === "flexible")
-      ? orderedAreaSidePoints(point.areaId, side)
-      : orderedSidePoints(point.dataId, side);
+    const list = orderedSidePoints(point.dataId, side);
     const current = list.indexOf(point) + 1;
 
     els.setPositionInfo.textContent =
@@ -3845,33 +2924,8 @@ const Workspace = (() => {
   }
 
   function setPointPosition(point, targetPos) {
-    const side = point.assignedSide || "";
-
-    if (project && project.sideMode === "flexible") {
-      const areaId = point.areaId;
-      const before = snapshotAreaOrder(areaId);
-      lockAreaSide(areaId, side);
-
-      const list = orderedAreaSidePoints(areaId, side);
-      const from = list.indexOf(point);
-      if (from < 0) return;
-
-      const to = Math.max(0, Math.min(list.length - 1, targetPos - 1));
-      list.splice(from, 1);
-      list.splice(to, 0, point);
-      list.forEach((p, i) => { p.manualSeq = i + 1; });
-
-      const after = snapshotAreaOrder(areaId);
-      pushUndo({ type: "reorderAreaBatch", areaId, before, after });
-
-      recalculateAreaOrder(areaId);
-      refreshAllPoints();
-      setStatus(`Moved to position ${to + 1} on side ${side || "Unassigned"}.`);
-      scheduleAutoSave();
-      return;
-    }
-
     const dataId = point.dataId;
+    const side = point.assignedSide || "";
 
     const before = snapshotOrder(dataId);
     lockSide(dataId, side);
@@ -3896,23 +2950,6 @@ const Workspace = (() => {
   }
 
   function togglePointExclude(point) {
-    if (project && project.sideMode === "flexible") {
-      const areaId = point.areaId;
-      const before = snapshotAreaOrder(areaId);
-      point.excluded = !point.excluded;
-      const after = snapshotAreaOrder(areaId);
-      pushUndo({ type: "reorderAreaBatch", areaId, before, after });
-
-      recalculateAreaOrder(areaId);
-      refreshAllPoints();
-      updateNoSideBanner();
-      setStatus(point.excluded
-        ? "Point excluded from export."
-        : "Point included in export.");
-      scheduleAutoSave();
-      return;
-    }
-
     const dataId = point.dataId;
     const before = snapshotOrder(dataId);
     point.excluded = !point.excluded;
@@ -3993,262 +3030,6 @@ const Workspace = (() => {
         button.classList.toggle("activeSide", (button.dataset.side || "") === currentSide);
       });
     }
-
-    const area = getArea(currentAreaId);
-    if (area) {
-      area.lastSelectedSide = currentSide;
-      if (els.flexibleSideRow) {
-        els.flexibleSideRow.querySelectorAll(".sideTag").forEach(tag => {
-          tag.classList.toggle("activeSide", tag.dataset.side === currentSide);
-        });
-      }
-    }
-  }
-
-  function renderSidePanelForCurrentArea() {
-    const isAreaMode = project && project.sideMode === "flexible";
-
-    if (els.compassSideRow) els.compassSideRow.classList.toggle("hidden", isAreaMode);
-    if (els.flexibleSideRow) els.flexibleSideRow.classList.toggle("hidden", !isAreaMode);
-
-    if (!isAreaMode) return;
-
-    const area = getArea(currentAreaId);
-    els.flexibleSideRow.innerHTML = "";
-    if (!area) return;
-
-    sidesForArea(area).forEach(side => {
-      const tag = document.createElement("button");
-      tag.type = "button";
-      tag.className = "sideTag" + (side === currentSide ? " activeSide" : "");
-      tag.dataset.side = side;
-
-      const label = document.createElement("span");
-      label.textContent = side;
-      tag.appendChild(label);
-
-      const removeBtn = document.createElement("span");
-      removeBtn.className = "sideTagRemove";
-      removeBtn.textContent = "×";
-      removeBtn.title = "Delete this side";
-      removeBtn.addEventListener("click", event => {
-        event.stopPropagation();
-        removeFlexibleSideTag(area, side);
-      });
-      tag.appendChild(removeBtn);
-
-      tag.addEventListener("click", () => setCurrentSide(side));
-      els.flexibleSideRow.appendChild(tag);
-    });
-
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.className = "sideTagAdd";
-    addBtn.textContent = "+ Segment";
-    addBtn.addEventListener("click", () => openAddFlexibleSideTag(area));
-    els.flexibleSideRow.appendChild(addBtn);
-
-    const manageBtn = document.createElement("button");
-    manageBtn.type = "button";
-    manageBtn.className = "sideTagAdd";
-    manageBtn.textContent = "⚙ Manage";
-    manageBtn.addEventListener("click", openManageSegmentsModal);
-    els.flexibleSideRow.appendChild(manageBtn);
-  }
-
-  function openAddFlexibleSideTag(area) {
-    els.sideNameInput.value = "";
-    pendingSideNameAreaId = area.id;
-    els.sideNameModal.classList.remove("hidden");
-    els.sideNameInput.focus();
-  }
-
-  function confirmAddFlexibleSideTag() {
-    const name = els.sideNameInput.value.trim();
-    if (!name) {
-      alert("Enter a Segment name.");
-      return;
-    }
-    if (sharedSegments.includes(name)) {
-      alert(`A shared Segment named "${name}" already exists.`);
-      return;
-    }
-
-    sharedSegments.push(name);
-    areas.forEach(area => {
-      if (!Array.isArray(area.sideTags)) area.sideTags = [];
-      if (!area.sideTags.includes(name)) area.sideTags.push(name);
-      if (!area.lastSelectedSide) area.lastSelectedSide = name;
-    });
-
-    els.sideNameModal.classList.add("hidden");
-    pendingSideNameAreaId = null;
-    renderSidePanelForCurrentArea();
-    setCurrentSide(name);
-    renderBatchSideChoices();
-    scheduleAutoSave();
-    if (addSegmentFromManage && els.manageSegmentsModal) {
-      addSegmentFromManage = false;
-      renderManageSegmentsList();
-      els.manageSegmentsModal.classList.remove("hidden");
-    }
-  }
-
-  function removeFlexibleSideTag(area, side) {
-    if (sharedSegments.length <= 1) {
-      alert("The project needs at least one shared Segment.");
-      return;
-    }
-    const affected = points.filter(p => p.assignedSide === side);
-    const areaCount = new Set(affected.map(p => p.areaId)).size;
-    const message = affected.length
-      ? `Shared Segment "${side}" is used by ${affected.length} point(s) across ${areaCount} Area(s). Deleting it removes those points from the whole project. Continue?`
-      : `Delete shared Segment "${side}" from the whole project?`;
-    if (!confirm(message)) return;
-
-    affected.forEach(point => removePointElement(point.uid));
-    points = points.filter(p => p.assignedSide !== side);
-    sharedSegments = sharedSegments.filter(name => name !== side);
-    areas.forEach(item => {
-      item.sideTags = (item.sideTags || []).filter(name => name !== side);
-      item.lockedSides = (item.lockedSides || []).filter(name => name !== side);
-      if (item.lastSelectedSide === side) item.lastSelectedSide = sharedSegments[0] || "";
-    });
-    if (currentSide === side) currentSide = sharedSegments[0] || "";
-
-    renderSidePanelForCurrentArea();
-    renderBatchSideChoices();
-    refreshAllPoints();
-    updateNoSideBanner();
-    scheduleAutoSave();
-  }
-
-  function getAvailableSides() {
-    if (project && project.sideMode === "flexible") {
-      const area = getArea(currentAreaId);
-      return area ? sidesForArea(area) : sharedSegments.slice();
-    }
-    return ["N", "E", "S", "W"];
-  }
-
-  function renderBatchSideChoices() {
-    if (!els.batchSideChoices) return;
-    els.batchSideChoices.innerHTML = "";
-    const sides = getAvailableSides();
-    sides.forEach(side => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.batchSide = side;
-      button.textContent = side;
-      button.disabled = batchAssignPoints.size === 0;
-      button.addEventListener("click", () => applyBatchSide(side));
-      els.batchSideChoices.appendChild(button);
-    });
-    els.batchSideButtons = Array.from(els.batchSideChoices.querySelectorAll("button"));
-    if (els.batchAutoBtn) {
-      els.batchAutoBtn.classList.toggle("hidden", !!(project && project.sideMode === "flexible"));
-    }
-  }
-
-  function renderContextSideChoices() {
-    if (!els.contextSideChoices) return;
-    els.contextSideChoices.innerHTML = "";
-    let sides;
-    if (project && project.sideMode === "flexible" && contextPoint) {
-      const area = getArea(contextPoint.areaId);
-      sides = area ? sidesForArea(area) : sharedSegments.slice();
-    } else {
-      sides = ["N", "E", "S", "W"];
-    }
-    sides.forEach(side => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = side;
-      button.addEventListener("click", () => assignContextPointSide(side));
-      els.contextSideChoices.appendChild(button);
-    });
-  }
-
-  function openManageSegmentsModal() {
-    if (!(project && project.sideMode === "flexible")) return;
-    renderManageSegmentsList();
-    els.manageSegmentsModal.classList.remove("hidden");
-  }
-
-  function renderManageSegmentsList() {
-    if (!els.manageSegmentsList) return;
-    const area = getArea(currentAreaId);
-    els.manageSegmentsList.innerHTML = "";
-    if (!area) return;
-    els.manageSegmentsHint.textContent = "Shared Segments are visible in every Area. Empty Segments are ignored by sorting and export.";
-    const tags = sharedSegments.slice();
-    tags.forEach((side, index) => {
-      const row = document.createElement("div");
-      row.className = "manageDataTypeRow";
-
-      const nameInput = document.createElement("input");
-      nameInput.type = "text";
-      nameInput.value = side;
-      nameInput.title = "Segment name";
-      nameInput.addEventListener("change", () => renameSegment(area, side, nameInput.value));
-
-      const count = document.createElement("span");
-      count.className = "manageDataTypeCount";
-      const pointCount = points.filter(p => p.assignedSide === side).length;
-      count.textContent = pointCount === 1 ? "1 point total" : `${pointCount} points total`;
-
-      const up = document.createElement("button");
-      up.type = "button"; up.textContent = "↑"; up.title = "Move up"; up.disabled = index === 0;
-      up.addEventListener("click", () => moveSegment(area, index, -1));
-      const down = document.createElement("button");
-      down.type = "button"; down.textContent = "↓"; down.title = "Move down"; down.disabled = index === tags.length - 1;
-      down.addEventListener("click", () => moveSegment(area, index, 1));
-      const del = document.createElement("button");
-      del.type = "button"; del.className = "manageDataTypeDeleteBtn"; del.textContent = "Delete";
-      del.addEventListener("click", () => { removeFlexibleSideTag(area, side); renderManageSegmentsList(); });
-
-      row.append(nameInput, count, up, down, del);
-      els.manageSegmentsList.appendChild(row);
-    });
-  }
-
-  function renameSegment(area, oldName, proposedName) {
-    const name = (proposedName || "").trim();
-    if (!name || name === oldName) { renderManageSegmentsList(); return; }
-    if (sharedSegments.includes(name)) { alert(`A shared Segment named "${name}" already exists.`); renderManageSegmentsList(); return; }
-    const sharedIndex = sharedSegments.indexOf(oldName);
-    if (sharedIndex < 0) return;
-    sharedSegments[sharedIndex] = name;
-    areas.forEach(item => {
-      item.sideTags = (item.sideTags || []).map(value => value === oldName ? name : value);
-      item.lockedSides = (item.lockedSides || []).map(value => value === oldName ? name : value);
-      if (item.lastSelectedSide === oldName) item.lastSelectedSide = name;
-    });
-    points.forEach(point => { if (point.assignedSide === oldName) point.assignedSide = name; });
-    if (currentSide === oldName) currentSide = name;
-    renderSidePanelForCurrentArea();
-    renderBatchSideChoices();
-    refreshAllPoints();
-    areas.forEach(item => recalculateAreaOrder(item.id));
-    scheduleAutoSave();
-    renderManageSegmentsList();
-  }
-
-  function moveSegment(area, index, delta) {
-    const next = index + delta;
-    if (next < 0 || next >= sharedSegments.length) return;
-    [sharedSegments[index], sharedSegments[next]] = [sharedSegments[next], sharedSegments[index]];
-    areas.forEach(item => {
-      const local = (item.sideTags || []).filter(name => sharedSegments.includes(name));
-      item.sideTags = sharedSegments.filter(name => local.includes(name));
-      sharedSegments.forEach(name => { if (!item.sideTags.includes(name)) item.sideTags.push(name); });
-      recalculateAreaOrder(item.id);
-    });
-    renderSidePanelForCurrentArea();
-    renderBatchSideChoices();
-    refreshAllPoints();
-    scheduleAutoSave();
-    renderManageSegmentsList();
   }
 
   function noSidePoints() {
@@ -4395,7 +3176,6 @@ const Workspace = (() => {
     els.measurementTitle.textContent = title;
     measurementCallback = callback;
     hideMeasurementError();
-    renderSidePanelForCurrentArea();
     els.measurementModal.classList.remove("hidden");
     const activeType = getDataType(els.dataSelect.value);
     if (els.missingValueBtn) els.missingValueBtn.style.setProperty("--missing-color", activeType?.color || "#1f6feb");
@@ -4416,17 +3196,6 @@ const Workspace = (() => {
         "Check the format. Examples: 26, 26 3/8, -12 1/2, 3/16."
       );
       return;
-    }
-
-    if (project && project.sideMode === "flexible") {
-      if (!currentAreaId) {
-        showMeasurementError("Select or create an area first.");
-        return;
-      }
-      if (!currentSide) {
-        showMeasurementError("Select or create a side first.");
-        return;
-      }
     }
 
     const callback = measurementCallback;
@@ -5056,13 +3825,8 @@ const Workspace = (() => {
 
     els.undoBtn.disabled = undoStack.length === 0;
     els.redoBtn.disabled = redoStack.length === 0;
-    const actionLabel = action => {
-      if (!action) return "";
-      if (action.type === "reorderBatch" || action.type === "reorderAreaBatch") return " Auto Sort";
-      return "";
-    };
-    els.undoBtn.title = undoStack.length ? `Undo${actionLabel(undoStack[undoStack.length - 1])}` : "Nothing to undo";
-    els.redoBtn.title = redoStack.length ? `Redo${actionLabel(redoStack[redoStack.length - 1])}` : "Nothing to redo";
+    els.undoBtn.title = undoStack.length ? "Undo" : "Nothing to undo";
+    els.redoBtn.title = redoStack.length ? "Redo" : "Nothing to redo";
   }
 
   function undo() {
@@ -5090,7 +3854,7 @@ const Workspace = (() => {
       if (Object.prototype.hasOwnProperty.call(action, "oldSide")) {
         action.point.assignedSide = action.oldSide || "";
       }
-      recalculateOrderForPoint(action.point);
+      recalculateDataTypeOrder(action.point.dataId);
       updatePointElement(action.point);
       updateNoSideBanner();
     }
@@ -5103,7 +3867,7 @@ const Workspace = (() => {
       action.point.moved = action.point.moveDistance > 0;
 
       if (action.point.assignedSide) {
-        recalculateOrderForPoint(action.point);
+        recalculateDataTypeOrder(action.point.dataId);
       }
 
       updatePointElement(action.point);
@@ -5114,7 +3878,7 @@ const Workspace = (() => {
       createPointElement(action.point);
 
       if (action.point.assignedSide) {
-        recalculateOrderForPoint(action.point);
+        recalculateDataTypeOrder(action.point.dataId);
       }
 
       renderDataSelect(action.point.dataId);
@@ -5138,10 +3902,6 @@ const Workspace = (() => {
 
     if (action.type === "reorderBatch") {
       Object.entries(action.before || {}).forEach(([dataId, snap]) => restoreOrder(dataId, snap));
-    }
-
-    if (action.type === "reorderAreaBatch") {
-      restoreAreaOrder(action.areaId, action.before);
     }
 
     if (action.type === "comment") {
@@ -5182,7 +3942,7 @@ const Workspace = (() => {
       if (Object.prototype.hasOwnProperty.call(action, "newSide")) {
         action.point.assignedSide = action.newSide || "";
       }
-      recalculateOrderForPoint(action.point);
+      recalculateDataTypeOrder(action.point.dataId);
       updatePointElement(action.point);
       updateNoSideBanner();
     }
@@ -5194,7 +3954,7 @@ const Workspace = (() => {
       action.point.moveDistance += action.distance;
 
       if (action.point.assignedSide) {
-        recalculateOrderForPoint(action.point);
+        recalculateDataTypeOrder(action.point.dataId);
       }
 
       updatePointElement(action.point);
@@ -5225,10 +3985,6 @@ const Workspace = (() => {
       Object.entries(action.after || {}).forEach(([dataId, snap]) => restoreOrder(dataId, snap));
     }
 
-    if (action.type === "reorderAreaBatch") {
-      restoreAreaOrder(action.areaId, action.after);
-    }
-
     if (action.type === "comment") {
       restoreCommentImage(action.after);
     }
@@ -5243,11 +3999,6 @@ const Workspace = (() => {
   }
 
   function exportCSV() {
-    if (project && project.sideMode === "flexible") {
-      exportCSVAreaMode();
-      return;
-    }
-
     const exportTypes = dataTypes.filter(dataType =>
       dataType.export &&
       points.some(point => point.dataId === dataType.id && !point.excluded)
@@ -5266,6 +4017,7 @@ const Workspace = (() => {
 
     if (noSideCount > 0) {
       pendingExportTypes = exportTypes;
+      pendingExportKind = "csv";
       els.noSideModalText.textContent =
         `${noSideCount} measurement${noSideCount === 1 ? "" : "s"} have no Side. Resolve now?`;
       els.noSideModal.classList.remove("hidden");
@@ -5273,83 +4025,6 @@ const Workspace = (() => {
     }
 
     proceedExportCSV(exportTypes);
-  }
-
-  function exportCSVAreaMode() {
-    const exportableTypeIds = new Set(dataTypes.filter(dt => dt.export).map(dt => dt.id));
-    const exportPoints = points.filter(point => !point.excluded && exportableTypeIds.has(point.dataId));
-
-    if (!exportPoints.length) {
-      setStatus("No points to export.");
-      return;
-    }
-
-    const noSideCount = exportPoints.filter(point => !(point.assignedSide || "")).length;
-
-    if (noSideCount > 0) {
-      pendingExportPoints = exportPoints;
-      els.noSideModalText.textContent =
-        `${noSideCount} measurement${noSideCount === 1 ? "" : "s"} have no Side. Resolve now?`;
-      els.noSideModal.classList.remove("hidden");
-      return;
-    }
-
-    proceedExportCSVAreaMode(exportPoints);
-  }
-
-  function proceedExportCSVAreaMode(exportPoints) {
-    // Make sure every point's assignedSide/assignedSeq is current before
-    // reading it into the export rows.
-    areas.forEach(area => recalculateAreaOrder(area.id));
-
-    openFileNameModal("Export CSV", project?.name || "measurements", chosen => {
-      if (!chosen) return;
-
-      const fileName =
-        chosen.toLowerCase().endsWith(".csv") ? chosen : chosen + ".csv";
-
-      const rows = exportPoints.slice().sort((a, b) => {
-        const areaA = getArea(a.areaId)?.name || "";
-        const areaB = getArea(b.areaId)?.name || "";
-        const dataA = getDataType(a.dataId)?.name || "";
-        const dataB = getDataType(b.dataId)?.name || "";
-        return areaA.localeCompare(areaB)
-          || String(a.assignedSide || "").localeCompare(String(b.assignedSide || ""))
-          || dataA.localeCompare(dataB)
-          || (a.assignedSeq || 0) - (b.assignedSeq || 0);
-      });
-
-      const headers = ["Area", "Data Type", "Side", "Seq", "Measurement", "Warning"];
-      let csv = headers.map(cleanCSV).join(",") + "\n";
-
-      rows.forEach(point => {
-        const area = getArea(point.areaId);
-        const dataType = getDataType(point.dataId);
-
-        const notes = [];
-        if (point.moveDistance > 80) {
-          notes.push("Point moved a large distance; check order");
-        } else if (point.moved) {
-          notes.push("Point moved");
-        }
-
-        const row = [
-          area ? area.name : "",
-          dataType ? dataType.name : "",
-          point.assignedSide || "Unassigned",
-          point.assignedSeq || "",
-          point.measurement,
-          notes.join("; ")
-        ];
-
-        csv += row.map(cleanCSV).join(",") + "\n";
-      });
-
-      downloadBlob(
-        new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
-        fileName
-      );
-    });
   }
 
   function proceedExportCSV(exportTypes) {
@@ -5414,7 +4089,50 @@ const Workspace = (() => {
         new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
         fileName
       );
+      setStatus("CSV exported.");
+      showExportToast("CSV export complete", fileName);
     });
+  }
+
+  async function exportJSON() {
+    if (!project) {
+      setStatus("No file is open.");
+      return;
+    }
+
+    try {
+      // Save the latest workspace state before creating the portable file.
+      // This makes Workspace > Export JSON use the same format as
+      // Library > Export File, so it can be opened through Import File.
+      await persistProjectState();
+      SaveController.markSaved();
+
+      const data = await ProjectDB.exportProject(project.id);
+
+      openFileNameModal("Export File", project.name || "measurements", chosen => {
+        if (!chosen) return;
+
+        let fileName = chosen;
+        const lowerName = fileName.toLowerCase();
+        if (!lowerName.endsWith(".fmfile.json")) {
+          fileName = lowerName.endsWith(".json")
+            ? fileName.slice(0, -5) + ".fmfile.json"
+            : fileName + ".fmfile.json";
+        }
+
+        downloadBlob(
+          new Blob([JSON.stringify(data)], { type: "application/json;charset=utf-8" }),
+          fileName
+        );
+
+        setStatus("Exported an importable work file.");
+      });
+    } catch (error) {
+      setStatus("Export failed.");
+      alert("Export failed: " + (ProjectDB.explainError
+        ? ProjectDB.explainError(error)
+        : (error?.message || String(error))));
+    }
   }
 
   function exportPDF() {
@@ -5517,15 +4235,11 @@ const Workspace = (() => {
         if (dataType?.export === false) return;
 
         const measurement = point.measurement || String(point.number);
-        const isAreaMode = project && project.sideMode === "flexible";
-        const area = isAreaMode ? getArea(point.areaId) : null;
 
-        const label =
-          showOrderLabels && point.assignedSide && point.assignedSeq
-            ? (isAreaMode
-                ? `${area ? area.name : "?"}-${point.assignedSide}-${point.assignedSeq}`
-                : `${point.assignedSide}${point.assignedSeq}`)
-            : measurement;
+        // PDF export always shows measurement data, regardless of the
+        // on-screen "Show Order Labels" toggle (which only affects the
+        // live workspace view).
+        const label = measurement;
 
         // White outline first, then the coloured text on top.
         context.lineWidth = Math.max(2, labelFontSize / 5);
@@ -5593,10 +4307,11 @@ const Workspace = (() => {
           .save();
       }
 
-      const pdfStatus = exportScale < 1
-        ? `PDF exported at ${Math.round(exportScale * 100)}% resolution for iPad compatibility.`
-        : "PDF exported.";
-      setStatus(pdfStatus);
+      setStatus(
+        exportScale < 1
+          ? `PDF exported at ${Math.round(exportScale * 100)}% resolution for iPad compatibility.`
+          : "PDF exported."
+      );
       showExportToast("PDF export complete", fileName);
     } catch (error) {
       console.error("PDF export failed:", error);
@@ -5632,15 +4347,12 @@ const Workspace = (() => {
       pageStates,
       currentPdfPage,
       dataTypes,
-      areas,
-      sharedSegments,
       textNotes,
       pointMode,
       showOrderLabels,
       zoomLevel,
       labelFontSize,
       selectedDataId: els.dataSelect.value,
-      selectedAreaId: currentAreaId,
       currentSide,
       commentImageData,
       brushColor,
@@ -5703,6 +4415,8 @@ const Workspace = (() => {
     if (!els.reviewSidebar) return;
 
     if (els.reviewSidebar.classList.contains("hidden")) {
+      reviewSearchTerm = "";
+      if (els.reviewSearchInput) els.reviewSearchInput.value = "";
       renderReviewList();
       els.reviewSidebar.classList.remove("hidden");
     } else {
@@ -5769,6 +4483,13 @@ const Workspace = (() => {
       ? typesWithPoints
       : typesWithPoints.filter(dt => dt.id === reviewFilter);
 
+    const term = reviewSearchTerm;
+
+    const matchesTerm = (tagText, valText) =>
+      !term ||
+      tagText.toLowerCase().includes(term) ||
+      valText.toLowerCase().includes(term);
+
     shownTypes.forEach(dt => {
       const section = document.createElement("div");
       section.className = "reviewSection";
@@ -5780,19 +4501,26 @@ const Workspace = (() => {
       section.appendChild(header);
 
       const list = getOrderedPoints(dt.id);
+      let visibleRows = 0;
 
       list.forEach(item => {
+        const tagText = (item.side || "U") + item.seq;
+        const valText = item.point.measurement || "(empty)";
+        if (!matchesTerm(tagText, valText)) return;
+
+        visibleRows += 1;
+
         const row = document.createElement("button");
         row.type = "button";
         row.className = "reviewRow";
 
         const tag = document.createElement("span");
         tag.className = "reviewTag";
-        tag.textContent = (item.side || "U") + item.seq;
+        tag.textContent = tagText;
 
         const val = document.createElement("span");
         val.className = "reviewVal";
-        val.textContent = item.point.measurement || "(empty)";
+        val.textContent = valText;
 
         row.appendChild(tag);
         row.appendChild(val);
@@ -5803,13 +4531,19 @@ const Workspace = (() => {
 
       // Excluded points for this type, greyed at the bottom of the section.
       const excluded = points.filter(p => p.dataId === dt.id && p.excluded);
-      if (excluded.length) {
+      const visibleExcluded = excluded.filter(point =>
+        matchesTerm("—", point.measurement || "(empty)")
+      );
+
+      if (visibleExcluded.length) {
         const exHeader = document.createElement("div");
         exHeader.className = "reviewTypeHeader reviewExcludedHeader";
         exHeader.textContent = "Excluded";
         section.appendChild(exHeader);
 
-        excluded.forEach(point => {
+        visibleExcluded.forEach(point => {
+          visibleRows += 1;
+
           const row = document.createElement("button");
           row.type = "button";
           row.className = "reviewRow reviewExcludedRow";
@@ -5830,8 +4564,61 @@ const Workspace = (() => {
         });
       }
 
+      // While searching, skip data types with no matching points at all.
+      if (term && visibleRows === 0) return;
+
       container.appendChild(section);
     });
+
+    if (term && !container.querySelector(".reviewRow")) {
+      const empty = document.createElement("p");
+      empty.className = "reviewEmpty";
+      empty.textContent = `No point found matching "${els.reviewSearchInput ? els.reviewSearchInput.value.trim() : term}".`;
+      container.appendChild(empty);
+    }
+  }
+
+  // Jumps straight to the first point whose label (e.g. "N3") or
+  // measurement matches the review search box, honouring the active
+  // data-type filter chip. Triggered by pressing Enter in that box.
+  function jumpToFirstReviewMatch() {
+    const term = reviewSearchTerm;
+    if (!term) return;
+
+    const typesWithPoints = dataTypes.filter(dt =>
+      points.some(p => p.dataId === dt.id)
+    );
+    const shownTypes = reviewFilter === "all"
+      ? typesWithPoints
+      : typesWithPoints.filter(dt => dt.id === reviewFilter);
+
+    for (const dt of shownTypes) {
+      const list = getOrderedPoints(dt.id);
+      const match = list.find(item => {
+        const tag = ((item.side || "U") + item.seq).toLowerCase();
+        const val = String(item.point.measurement || "").toLowerCase();
+        return tag.includes(term) || val.includes(term);
+      });
+      if (match) {
+        jumpToPoint(match.point);
+        setStatus(`Found ${(match.side || "U") + match.seq}.`);
+        return;
+      }
+    }
+
+    for (const dt of shownTypes) {
+      const excluded = points.filter(p => p.dataId === dt.id && p.excluded);
+      const match = excluded.find(point =>
+        String(point.measurement || "").toLowerCase().includes(term)
+      );
+      if (match) {
+        jumpToPoint(match);
+        setStatus("Found an excluded point.");
+        return;
+      }
+    }
+
+    setStatus("No matching point found.");
   }
 
   function jumpToPoint(point) {
@@ -5864,6 +4651,17 @@ const Workspace = (() => {
   function applyZoom() {
     els.drawingArea.style.transform = `scale(${zoomLevel})`;
     els.drawingArea.style.setProperty("--inv-zoom", String(1 / zoomLevel));
+
+    // Reserve the scaled scroll space so zoomed-in content is reachable on both
+    // axes in every browser. offsetWidth/Height are the unscaled layout size and
+    // are reliable for PDF, image and blank drawings; 24 = 12px frame on each of
+    // the two sides (left/right, top/bottom).
+    if (els.drawingSizer) {
+      const layoutWidth = els.drawingArea.offsetWidth;
+      const layoutHeight = els.drawingArea.offsetHeight;
+      els.drawingSizer.style.width = (layoutWidth * zoomLevel + 24) + "px";
+      els.drawingSizer.style.height = (layoutHeight * zoomLevel + 24) + "px";
+    }
 
     if (els.zoomDisplay) {
       els.zoomDisplay.textContent = Math.round(zoomLevel * 100) + "%";
@@ -5909,6 +4707,32 @@ const Workspace = (() => {
     labelFontSize = 30;
     applyLabelFontSize();
     scheduleAutoSave();
+  }
+
+  function applyPinchZoom(event) {
+    const wrapper = els.drawingWrapper;
+    const rect = wrapper.getBoundingClientRect();
+    const dist = touchDistance(event.touches[0], event.touches[1]);
+    if (pinchStartDist <= 0) return;
+
+    const oldZoom = zoomLevel;
+    const newZoom = Math.max(
+      0.3,
+      Math.min(5, Math.round(pinchStartZoom * (dist / pinchStartDist) * 100) / 100)
+    );
+    if (newZoom === oldZoom) return;
+
+    const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2 - rect.left;
+    const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2 - rect.top;
+
+    const contentX = (wrapper.scrollLeft + midX) / oldZoom;
+    const contentY = (wrapper.scrollTop + midY) / oldZoom;
+
+    zoomLevel = newZoom;
+    applyZoom();
+
+    wrapper.scrollLeft = contentX * newZoom - midX;
+    wrapper.scrollTop = contentY * newZoom - midY;
   }
 
   function touchDistance(a, b) {
@@ -5967,7 +4791,6 @@ const Workspace = (() => {
 
   function refreshAllPoints() {
     points.forEach(updatePointElement);
-    if (workspaceMode === "review") renderReviewDataTypeFilter();
     refreshReviewIfOpen();
   }
 
@@ -5982,6 +4805,10 @@ const Workspace = (() => {
     if (!isDraggingPoint) {
       els.drawingWrapper.classList.remove("pointDragActive");
     }
+  }
+
+  function setStatus(message) {
+    els.status.textContent = message;
   }
 
   function showExportToast(message, detail = "") {
@@ -6000,8 +4827,14 @@ const Workspace = (() => {
     showExportToast.timer = setTimeout(() => toast.classList.remove("show"), 3200);
   }
 
-  function setStatus(message) {
-    els.status.textContent = message;
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[char]));
   }
 
   function cleanCSV(value) {
@@ -6025,16 +4858,6 @@ const Workspace = (() => {
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
-  }
-
-  function escapeHTML(value) {
-    return String(value ?? "").replace(/[&<>"']/g, char => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;"
-    }[char]));
   }
 
   return {

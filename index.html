@@ -109,7 +109,7 @@
         <button id="manualSaveBtn" class="toolbarButton saveButton" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5zM8 3v6h8V3M8 21v-8h8v8"/></svg>Save</button>
         <details class="exportMenu">
           <summary class="toolbarButton"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/></svg>Export</summary>
-          <div class="exportMenuPanel"><button id="exportCsvBtn" type="button">Export CSV</button><button id="exportPdfBtn" type="button">Export PDF</button></div>
+          <div class="exportMenuPanel"><button id="exportCsvBtn" type="button">Export CSV</button><button id="exportPdfBtn" type="button">Export PDF</button><button id="exportJsonBtn" type="button">Export File</button></div>
         </details>
       </div>
 
@@ -118,10 +118,6 @@
         <button id="dataTypePickerBtn" class="toolbarButton dataTypePickerBtn measureOnly" type="button" title="Choose or manage data type">
           <span id="dataTypeSwatch" class="dataTypeSwatch"></span>
           <span id="dataTypePickerLabel">Data Type</span>
-        </button>
-        <button id="areaDataTypePickerBtn" class="toolbarButton dataTypePickerBtn measureOnly hidden" type="button" title="Choose or manage area and data type">
-          <span id="areaDataTypeSwatch" class="dataTypeSwatch"></span>
-          <span id="areaDataTypePickerLabel">Area · Data Type</span>
         </button>
         <button id="addBtn" class="toolbarButton measureOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Point</button>
         <button id="lockBtn" class="toolbarButton measureOnly" type="button"><svg class="uiIcon" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Lock</button>
@@ -186,16 +182,21 @@
 
     <div id="batchAssignBar" class="batchAssignBar hidden">
       <strong id="batchAssignText">Batch Side: 0 selected</strong>
-<span id="batchSideChoices" class="batchSideChoices"></span>
+      <button type="button" data-batch-side="N">N</button>
+      <button type="button" data-batch-side="E">E</button>
+      <button type="button" data-batch-side="S">S</button>
+      <button type="button" data-batch-side="W">W</button>
       <button id="batchAutoBtn" type="button">Reset Auto</button>
       <button id="batchCancelBtn" type="button">Cancel</button>
     </div>
 
     <div id="drawingWrapper">
-      <div id="drawingArea">
-        <img id="drawingImage" alt="Drawing" class="hidden">
-        <canvas id="pdfCanvas" class="hidden"></canvas>
-        <canvas id="commentCanvas"></canvas>
+      <div id="drawingSizer">
+        <div id="drawingArea">
+          <img id="drawingImage" alt="Drawing" class="hidden">
+          <canvas id="pdfCanvas" class="hidden"></canvas>
+          <canvas id="commentCanvas"></canvas>
+        </div>
       </div>
     </div>
     <div id="noSideBanner" class="noSideBanner hidden">
@@ -206,6 +207,9 @@
       <div class="reviewHeader">
         <span>Preview CSV</span>
         <button id="closeReviewBtn" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="reviewSearchBar">
+        <input id="reviewSearchInput" type="text" inputmode="text" autocomplete="off" placeholder="Find point by label (e.g. N3)" />
       </div>
       <div id="reviewList" class="reviewList"></div>
     </aside>
@@ -225,6 +229,7 @@
   <div id="libraryContextMenu" class="popupMenu hidden">
     <button id="renameLibraryAction" type="button">Rename</button>
     <button id="duplicateLibraryAction" type="button">Duplicate</button>
+    <button id="moveLibraryAction" type="button">Move to Folder…</button>
     <button id="exportFileAction" type="button">Export File</button>
     <button id="deleteLibraryAction" class="dangerText" type="button">Delete</button>
   </div>
@@ -236,6 +241,21 @@
       <div class="modalActions">
         <button id="cancelRenameBtn" type="button">Cancel</button>
         <button id="confirmRenameBtn" class="primaryButton" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="moveModal" class="modalBackdrop hidden">
+    <div class="modalCard moveModalCard">
+      <h2 id="moveModalTitle">Move to Folder</h2>
+      <div class="moveModalNav">
+        <button id="moveUpFolderBtn" type="button" disabled>⬆ Up</button>
+        <span id="moveModalPath" class="moveModalPath">Library</span>
+      </div>
+      <div id="moveModalList" class="moveModalList"></div>
+      <div class="modalActions">
+        <button id="cancelMoveBtn" type="button">Cancel</button>
+        <button id="confirmMoveHereBtn" class="primaryButton" type="button">Move Here</button>
       </div>
     </div>
   </div>
@@ -268,30 +288,19 @@
         <select id="autoSortDataType"></select>
       </label>
 
-      <label id="autoSortSideDropdownField">
+      <label>
         Side
-        <select id="autoSortSide"></select>
+        <select id="autoSortSide">
+          <option value="__all__">All Sides</option>
+          <option value="N">North</option>
+          <option value="E">East</option>
+          <option value="S">South</option>
+          <option value="W">West</option>
+        </select>
       </label>
 
-      <fieldset class="autoSortSidesField hidden" id="autoSortSidesField">
-        <legend>Segments to include (all recommended)</legend>
-        <div id="autoSortSidesList" class="radioRow"></div>
-      </fieldset>
-
-      <fieldset class="autoSortMethod hidden">
-        <legend>Sort Method</legend>
-        <label class="radioChoice">
-          <input type="radio" name="autoSortMethod" value="position" checked>
-          <span>Straight wall（方正 / 按坐标排序）</span>
-        </label>
-        <label class="radioChoice">
-          <input type="radio" name="autoSortMethod" value="angle">
-          <span>Curved wall（圆弧 / 按角度排序）</span>
-        </label>
-      </fieldset>
-
-      <fieldset class="autoSortDirection" id="autoSortCompassDirectionField">
-        <legend>Sort direction</legend>
+      <fieldset class="autoSortDirection">
+        <legend>Direction</legend>
         <label class="radioChoice">
           <input type="radio" name="autoSortDirection" value="clockwise" checked>
           <span>↻ Clockwise</span>
@@ -302,33 +311,12 @@
         </label>
       </fieldset>
 
-      <fieldset class="autoSortDirection" id="autoSortFlexibleDirectionField">
-        <legend>Direction (custom-side data types)</legend>
-        <label class="radioChoice">
-          <input type="radio" name="autoSortFlexibleDirection" value="lr" checked>
-          <span>从左到右</span>
-        </label>
-        <label class="radioChoice">
-          <input type="radio" name="autoSortFlexibleDirection" value="rl">
-          <span>从右到左</span>
-        </label>
-        <label class="radioChoice">
-          <input type="radio" name="autoSortFlexibleDirection" value="tb">
-          <span>从上到下</span>
-        </label>
-        <label class="radioChoice">
-          <input type="radio" name="autoSortFlexibleDirection" value="bt">
-          <span>从下到上</span>
-        </label>
-      </fieldset>
-
       <div class="modalActions">
         <button id="cancelAutoSortBtn" type="button">Cancel</button>
         <button id="confirmAutoSortBtn" class="primaryButton" type="button">Sort</button>
       </div>
     </div>
   </div>
-
 
   <div id="autoSortReviewModal" class="modalBackdrop sortReviewBackdrop hidden">
     <div class="modalCard autoSortReviewCard" role="dialog" aria-modal="true" aria-label="Auto Sort Review">
@@ -448,18 +436,6 @@
         <input id="projectNameInput" type="text" placeholder="Level 11">
       </label>
 
-      <fieldset class="projectSideModeField">
-        <legend>Side Naming (applies to the whole work file)</legend>
-        <label class="radioChoice">
-          <input type="radio" name="projectSideMode" value="compass" checked>
-          <span>Compass (N/E/S/W) — building facades</span>
-        </label>
-        <label class="radioChoice">
-          <input type="radio" name="projectSideMode" value="flexible">
-          <span>Custom Segments (1/2/3…) — rooms, units, divided areas</span>
-        </label>
-      </fieldset>
-
       <div id="blankSizeFields" class="hidden">
         <div class="fieldRow">
           <label>
@@ -501,14 +477,13 @@
       <div class="measurementKeypad v6Keypad">
         <div class="currentSidePanel">
           <div class="currentSideLabel">Current Side <span class="currentSideReminder">Check before entering</span></div>
-          <div id="compassSideRow" class="sideRow">
+          <div class="sideRow">
             <button class="sideBtn" data-side="N" type="button">N</button>
             <button class="sideBtn" data-side="E" type="button">E</button>
             <button class="sideBtn" data-side="S" type="button">S</button>
             <button class="sideBtn" data-side="W" type="button">W</button>
             <button class="sideBtn pendingSideBtn activeSide" data-side="" type="button" title="Pending side">?</button>
           </div>
-          <div id="flexibleSideRow" class="sideRow flexibleSideRow hidden"></div>
         </div>
 
         <div class="v6MainGrid fractionKeypadGrid">
@@ -649,106 +624,17 @@
     </div>
   </div>
 
-  <div id="areaModal" class="modalBackdrop hidden">
-    <div class="modalCard">
-      <h2>Add Area</h2>
-      <label>
-        Area number / name
-        <input id="areaNameInput" type="text" value="New Area">
-      </label>
-      <p class="hint" id="inheritSidesHint"></p>
-      <div class="modalActions">
-        <button id="cancelAreaBtn" type="button">Cancel</button>
-        <button id="confirmAreaBtn" class="primaryButton" type="button">Add</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="manageAreasModal" class="modalBackdrop hidden">
-    <div class="modalCard manageDataTypesCard">
-      <h2>Manage Areas</h2>
-      <p class="manageDataTypesHint">Rename an area any time. Deleting an area that still has points will ask whether to move those points to another area first, or delete them permanently.</p>
-
-      <div id="manageAreasList" class="manageDataTypesList"></div>
-
-      <div class="modalActions">
-        <button id="addAreaFromManageBtn" type="button">+ Add Area</button>
-        <button id="closeManageAreasBtn" class="primaryButton" type="button">Done</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="reassignAreaModal" class="modalBackdrop hidden">
-    <div class="modalCard reassignDataTypeCard">
-      <h2 id="reassignAreaTitle">Move points before deleting?</h2>
-      <p id="reassignAreaHint" class="reassignDataTypeHint"></p>
-
-      <div id="reassignAreaList" class="dataTypePickerList"></div>
-
-      <div class="modalActions">
-        <button id="deleteAreaPermanentlyBtn" class="dangerButton" type="button">Delete permanently instead</button>
-        <button id="cancelReassignAreaBtn" class="primaryButton" type="button">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="areaDataTypePickerModal" class="modalBackdrop hidden">
-    <div class="modalCard areaDataTypePickerCard">
-      <h2>Choose Area &amp; Data Type</h2>
-
-      <div class="pickerSection">
-        <div class="pickerSectionLabel">Area</div>
-        <div id="pickerAreaList" class="dataTypePickerList"></div>
-      </div>
-
-      <div class="pickerSection">
-        <div class="pickerSectionLabel">Data Type</div>
-        <div id="pickerDataTypeList" class="dataTypePickerList"></div>
-      </div>
-
-      <div class="modalActions">
-        <button id="manageAreasFromCombinedPickerBtn" type="button">⚙ Manage Areas</button>
-        <button id="manageSegmentsFromCombinedPickerBtn" type="button">⚙ Manage Segments</button>
-        <button id="manageDataTypesFromCombinedPickerBtn" type="button">⚙ Manage Data Types</button>
-      </div>
-      <div class="modalActions">
-        <button id="cancelCombinedPickerBtn" class="primaryButton" type="button">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="manageSegmentsModal" class="modalBackdrop hidden">
-    <div class="modalCard manageDataTypesCard">
-      <h2>Manage Segments</h2>
-      <p id="manageSegmentsHint" class="manageDataTypesHint">Segments belong to the currently selected Area. Rename, reorder, add, or delete them here.</p>
-      <div id="manageSegmentsList" class="manageDataTypesList"></div>
-      <div class="modalActions">
-        <button id="addSegmentFromManageBtn" type="button">+ Add Segment</button>
-        <button id="closeManageSegmentsBtn" class="primaryButton" type="button">Done</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="sideNameModal" class="modalBackdrop hidden">
-    <div class="modalCard">
-      <h2>New Segment</h2>
-      <label>
-        Name (e.g. 1, 2, 3 or Left, Middle, Right)
-        <input id="sideNameInput" type="text" value="">
-      </label>
-      <div class="modalActions">
-        <button id="cancelSideNameBtn" type="button">Cancel</button>
-        <button id="confirmSideNameBtn" class="primaryButton" type="button">Add</button>
-      </div>
-    </div>
-  </div>
-
   <div id="sideModal" class="modalBackdrop hidden">
     <div class="modalCard">
       <h2>Assign Side</h2>
       <p>Only this point changes side. Other points remain fixed.</p>
 
-      <div id="contextSideChoices" class="sideButtons"></div>
+      <div class="sideButtons">
+        <button data-side="N">N</button>
+        <button data-side="E">E</button>
+        <button data-side="S">S</button>
+        <button data-side="W">W</button>
+      </div>
 
       <button id="cancelSideBtn" class="fullWidthButton" type="button">Cancel</button>
     </div>
@@ -794,9 +680,11 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("sw.js").catch(error => {
-          console.warn("Service worker registration failed:", error);
-        });
+        navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+          .then(registration => registration.update())
+          .catch(error => {
+            console.warn("Service worker registration failed:", error);
+          });
       });
     }
   </script>

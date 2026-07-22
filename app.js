@@ -7,6 +7,8 @@ const App = (() => {
   let currentFolderId = null;
   let currentMenuItem = null;
   let pendingRename = null;
+  let moveTargetItem = null;
+  let moveModalFolderId = null;
 
   let pendingProjectKind = null;
   let pendingPdfData = null;
@@ -50,6 +52,7 @@ const App = (() => {
     els.libraryContextMenu = document.getElementById("libraryContextMenu");
     els.renameLibraryAction = document.getElementById("renameLibraryAction");
     els.duplicateLibraryAction = document.getElementById("duplicateLibraryAction");
+    els.moveLibraryAction = document.getElementById("moveLibraryAction");
     els.deleteLibraryAction = document.getElementById("deleteLibraryAction");
     els.exportFileAction = document.getElementById("exportFileAction");
     els.importFileBtn = document.getElementById("importFileBtn");
@@ -68,6 +71,13 @@ const App = (() => {
     els.cancelRenameBtn = document.getElementById("cancelRenameBtn");
     els.confirmRenameBtn = document.getElementById("confirmRenameBtn");
 
+    els.moveModal = document.getElementById("moveModal");
+    els.moveModalPath = document.getElementById("moveModalPath");
+    els.moveModalList = document.getElementById("moveModalList");
+    els.moveUpFolderBtn = document.getElementById("moveUpFolderBtn");
+    els.cancelMoveBtn = document.getElementById("cancelMoveBtn");
+    els.confirmMoveHereBtn = document.getElementById("confirmMoveHereBtn");
+
     els.folderModal = document.getElementById("folderModal");
     els.folderNameInput = document.getElementById("folderNameInput");
     els.cancelFolderModal = document.getElementById("cancelFolderModal");
@@ -76,7 +86,6 @@ const App = (() => {
     els.projectModal = document.getElementById("projectModal");
     els.projectModalTitle = document.getElementById("projectModalTitle");
     els.projectNameInput = document.getElementById("projectNameInput");
-    els.projectSideModeChoices = Array.from(document.querySelectorAll('input[name="projectSideMode"]'));
     els.blankSizeFields = document.getElementById("blankSizeFields");
     els.blankWidthInput = document.getElementById("blankWidthInput");
     els.blankHeightInput = document.getElementById("blankHeightInput");
@@ -154,6 +163,7 @@ const App = (() => {
 
     els.renameLibraryAction.addEventListener("click", renameSelectedItem);
     els.duplicateLibraryAction.addEventListener("click", duplicateSelectedItem);
+    els.moveLibraryAction.addEventListener("click", moveSelectedItem);
     els.deleteLibraryAction.addEventListener("click", deleteSelectedItem);
 
     els.exportFileAction.addEventListener("click", exportSelectedFile);
@@ -180,6 +190,10 @@ const App = (() => {
         confirmRename();
       }
     });
+
+    els.cancelMoveBtn.addEventListener("click", closeMoveModal);
+    els.confirmMoveHereBtn.addEventListener("click", confirmMoveHere);
+    els.moveUpFolderBtn.addEventListener("click", moveUpInModal);
 
     document.addEventListener("click", event => {
       if (!els.newProjectMenu.contains(event.target)) {
@@ -307,7 +321,8 @@ const App = (() => {
 
     const updated = document.createElement("p");
     updated.className = "projectUpdated";
-    updated.textContent = `${pointCount} points · ${formatDate(project.updatedAt)}`;
+    updated.textContent =
+      `${pointCount} points · Updated ${formatDate(project.updatedAt)}`;
 
     activity.append(modifiedBadge, updated);
     openArea.append(preview, title, meta, activity);
@@ -440,7 +455,7 @@ const App = (() => {
         event.clientX,
         event.clientY,
         200,
-        item.type === "folder" ? 100 : 145
+        item.type === "folder" ? 140 : 185
       );
     });
 
@@ -561,7 +576,6 @@ const App = (() => {
         : "Create Blank Drawing";
 
     els.projectNameInput.value = suggestedName;
-    els.projectSideModeChoices.forEach(choice => { choice.checked = choice.value === "compass"; });
 
     els.blankSizeFields.classList.toggle(
       "hidden",
@@ -603,15 +617,12 @@ const App = (() => {
     }
 
     const now = Date.now();
-    const selectedSideMode = els.projectSideModeChoices.find(choice => choice.checked);
-    const sideMode = selectedSideMode ? selectedSideMode.value : "compass";
 
     const project = {
       id: ProjectDB.makeId("project"),
       name,
       folderId: currentFolderId,
       kind: pendingProjectKind,
-      sideMode,
       createdAt: now,
       updatedAt: now,
 
@@ -735,6 +746,148 @@ const App = (() => {
     els.renameModal.classList.add("hidden");
   }
 
+  function getFolderDescendantIds(folderId) {
+    const result = new Set();
+    const stack = [folderId];
+
+    while (stack.length) {
+      const id = stack.pop();
+      folders
+        .filter(folder => folder.parentId === id)
+        .forEach(folder => {
+          if (!result.has(folder.id)) {
+            result.add(folder.id);
+            stack.push(folder.id);
+          }
+        });
+    }
+
+    return result;
+  }
+
+  function moveSelectedItem() {
+    hideMenus();
+    if (!currentMenuItem) return;
+
+    const record = currentMenuItem.type === "folder"
+      ? folders.find(item => item.id === currentMenuItem.id)
+      : projects.find(item => item.id === currentMenuItem.id);
+    if (!record) return;
+
+    moveTargetItem = { type: currentMenuItem.type, id: currentMenuItem.id };
+    moveModalFolderId = currentMenuItem.type === "folder"
+      ? (record.parentId || null)
+      : (record.folderId || null);
+
+    renderMoveModal();
+    els.moveModal.classList.remove("hidden");
+  }
+
+  function closeMoveModal() {
+    moveTargetItem = null;
+    els.moveModal.classList.add("hidden");
+  }
+
+  function renderMoveModal() {
+    if (!moveTargetItem) return;
+
+    // A folder can never be moved into itself or one of its own subfolders.
+    const forbidden = moveTargetItem.type === "folder"
+      ? new Set([moveTargetItem.id, ...getFolderDescendantIds(moveTargetItem.id)])
+      : new Set();
+
+    if (forbidden.has(moveModalFolderId)) {
+      moveModalFolderId = null;
+    }
+
+    const path = [];
+    let id = moveModalFolderId;
+    while (id) {
+      const folder = folders.find(item => item.id === id);
+      if (!folder) break;
+      path.unshift(folder);
+      id = folder.parentId || null;
+    }
+
+    els.moveModalPath.textContent =
+      "Library" + path.map(folder => " / " + folder.name).join("");
+    els.moveUpFolderBtn.disabled = !moveModalFolderId;
+
+    els.moveModalList.innerHTML = "";
+
+    const subfolders = folders
+      .filter(folder => (folder.parentId || null) === moveModalFolderId)
+      .filter(folder => !forbidden.has(folder.id));
+
+    if (!subfolders.length) {
+      const empty = document.createElement("p");
+      empty.className = "moveModalEmpty";
+      empty.textContent = "No subfolders here.";
+      els.moveModalList.appendChild(empty);
+      return;
+    }
+
+    subfolders.forEach(folder => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "moveModalRow";
+      row.textContent = "📁 " + folder.name;
+      row.addEventListener("click", () => {
+        moveModalFolderId = folder.id;
+        renderMoveModal();
+      });
+      els.moveModalList.appendChild(row);
+    });
+  }
+
+  function moveUpInModal() {
+    if (!moveModalFolderId) return;
+    const folder = folders.find(item => item.id === moveModalFolderId);
+    moveModalFolderId = folder?.parentId || null;
+    renderMoveModal();
+  }
+
+  async function confirmMoveHere() {
+    if (!moveTargetItem) return;
+
+    try {
+      if (moveTargetItem.type === "folder") {
+        const folder = folders.find(item => item.id === moveTargetItem.id);
+        if (!folder) { closeMoveModal(); return; }
+
+        if (findSiblingByName("folder", folder.name, moveModalFolderId, folder.id)) {
+          alert(`A folder named "${folder.name}" already exists there. Rename it first.`);
+          return;
+        }
+
+        folder.parentId = moveModalFolderId;
+        await ProjectDB.saveFolder(folder);
+      } else {
+        const project = projects.find(item => item.id === moveTargetItem.id);
+        if (!project) { closeMoveModal(); return; }
+
+        const duplicate = findSiblingByName("project", project.name, moveModalFolderId, project.id);
+        if (duplicate) {
+          const replace = confirm(
+            `A work file named "${project.name}" already exists there.\n\n` +
+            "OK = Replace it (the old file is deleted)\n" +
+            "Cancel = keep this file where it is"
+          );
+          if (!replace) return;
+          await ProjectDB.deleteProject(duplicate.id);
+        }
+
+        project.folderId = moveModalFolderId;
+        await ProjectDB.saveProject(project);
+      }
+
+      closeMoveModal();
+      await refreshLibrary();
+    } catch (error) {
+      alert("Move failed: " + explainDbError(error));
+    }
+  }
+
   async function exportSelectedFile() {
     hideMenus();
 
@@ -757,6 +910,96 @@ const App = (() => {
     }
   }
 
+  /*
+    Some older versions of this app could export a "data only" JSON file:
+    no format tag, no PDF/image, just { project, exportedAt, dataTypes }
+    where each dataTypes[].points held { side, seq, measurement, x, y, warning }.
+    Newer versions only understand the "field-measurement-file" wrapper, so
+    those legacy files used to fail on both Import and Restore. Detect and
+    convert them here so they load like any other single-file export.
+  */
+  function isLegacyDataOnlyExport(data) {
+    return !!(
+      data &&
+      typeof data.project === "string" &&
+      Array.isArray(data.dataTypes) &&
+      data.dataTypes.every(dt => dt && typeof dt.id === "string" && Array.isArray(dt.points))
+    );
+  }
+
+  function convertLegacyDataExport(data, folderId) {
+    const now = Date.now();
+    const points = [];
+    let maxX = 0;
+    let maxY = 0;
+
+    const dataTypes = data.dataTypes.map(dt => {
+      const legacyPoints = Array.isArray(dt.points) ? dt.points : [];
+
+      legacyPoints.forEach((p, index) => {
+        const x = Number(p.x) || 0;
+        const y = Number(p.y) || 0;
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+
+        points.push({
+          uid: "point_" + now + "_" + Math.random().toString(16).slice(2) + "_" + points.length,
+          dataId: dt.id,
+          number: index + 1,
+          x,
+          y,
+          measurement: p.measurement != null ? String(p.measurement) : "",
+          moved: false,
+          moveDistance: 0,
+          excluded: false,
+          assignedSide: p.side || "",
+          assignedSeq: p.seq || ""
+        });
+      });
+
+      return {
+        id: dt.id,
+        name: dt.name || "Data",
+        color: dt.color || "#000000",
+        counter: legacyPoints.length + 1,
+        export: true,
+        ordered: false,
+        direction: "clockwise",
+        lockedSides: []
+      };
+    });
+
+    return {
+      id: ProjectDB.makeId("project"),
+      name: data.project || "Imported file",
+      folderId: folderId || null,
+      kind: "blank",
+      createdAt: now,
+      updatedAt: now,
+      pdfData: null,
+      _assetSaved: true,
+      // No image was stored in this old export format — give the canvas
+      // enough room to fit every point that was recorded.
+      blankWidth: Math.max(2400, Math.ceil(maxX + 200)),
+      blankHeight: Math.max(1600, Math.ceil(maxY + 200)),
+      state: {
+        points,
+        dataTypes,
+        textNotes: [],
+        selectedDataId: dataTypes[0]?.id || null,
+        pointMode: "lock",
+        showOrderLabels: false,
+        zoomLevel: 1,
+        labelFontSize: 30,
+        commentImageData: "",
+        scrollLeft: 0,
+        scrollTop: 0,
+        currentPdfPage: 1,
+        pageStates: {}
+      }
+    };
+  }
+
   async function handleImportFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -769,17 +1012,16 @@ const App = (() => {
       return;
     }
 
-    // Older/lighter "export measurement data" files carry the points and
-    // data types directly, with no "format" tag — recognize that shape and
-    // rebuild a full, editable project from it.
-    const isMeasurementDataExport =
-      data && typeof data.project === "string" && Array.isArray(data.dataTypes);
-
-    if (isMeasurementDataExport) {
+    if (isLegacyDataOnlyExport(data)) {
       try {
-        const imported = await importMeasurementDataExport(data, currentFolderId);
+        const project = convertLegacyDataExport(data, currentFolderId);
+        await ProjectDB.saveProject(project);
         await refreshLibrary();
-        alert(`Imported "${imported.name}" into this folder as a new, editable work file.`);
+        alert(
+          `Imported "${project.name}" into this folder.\n\n` +
+          "This was an older data-only export with no background image, " +
+          "so it was placed on a blank drawing sized to fit the measurement points."
+        );
       } catch (error) {
         alert("Import failed: " + explainDbError(error));
       }
@@ -787,10 +1029,7 @@ const App = (() => {
     }
 
     if (!data || !["field-measurement-file", "field-measurement-files"].includes(data.format)) {
-      alert(
-        "That file isn't a format Import File recognizes.\n\n" +
-        "For a whole-library backup file, use Restore instead."
-      );
+      alert("That is not a single-file export. For a whole-library backup file, use Restore instead.");
       return;
     }
 
@@ -810,95 +1049,11 @@ const App = (() => {
     }
   }
 
-  /*
-    Rebuilds a full, editable work file from a "measurement data export" —
-    the lighter export that only carries data types + points (id, name,
-    color, and each point's side/seq/measurement/x/y/warning), with no
-    background PDF/image and no "format" tag. The order each point had
-    (its "seq" within its side) is preserved exactly via manualSeq, and
-    that side is marked "locked" so it displays in the same order
-    immediately, without needing to re-run Auto Sort.
-  */
-  async function importMeasurementDataExport(data, folderId) {
-    const dataTypes = [];
-    const points = [];
-    let maxX = 0;
-    let maxY = 0;
-
-    (data.dataTypes || []).forEach((sourceType, typeIndex) => {
-      const dataId = sourceType.id || ProjectDB.makeId("data");
-      const sidesSeen = new Set();
-      let pointCount = 0;
-
-      (sourceType.points || []).forEach((sourcePoint, pointIndex) => {
-        const side = sourcePoint.side || "";
-        const x = Number(sourcePoint.x) || 0;
-        const y = Number(sourcePoint.y) || 0;
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-        if (side) sidesSeen.add(side);
-        pointCount += 1;
-
-        points.push({
-          uid: "point_" + Date.now() + "_" + typeIndex + "_" + pointIndex + "_" + Math.random().toString(16).slice(2),
-          dataId,
-          number: pointIndex + 1,
-          x, y,
-          measurement: sourcePoint.measurement || "",
-          moved: false,
-          moveDistance: 0,
-          excluded: false,
-          assignedSide: side,
-          assignedSeq: sourcePoint.seq || "",
-          manualSeq: sourcePoint.seq || pointIndex + 1
-        });
-      });
-
-      dataTypes.push({
-        id: dataId,
-        name: sourceType.name || `Data ${typeIndex + 1}`,
-        color: sourceType.color || "#000000",
-        counter: pointCount + 1,
-        export: true,
-        ordered: true,
-        direction: "clockwise",
-        lockedSides: Array.from(sidesSeen)
-      });
-    });
-
-    const now = Date.now();
-    const project = {
-      id: ProjectDB.makeId("project"),
-      name: (data.project || "Recovered file") + " (recovered)",
-      folderId: folderId || null,
-      kind: "blank",
-      sideMode: "compass",
-      createdAt: now,
-      updatedAt: now,
-      blankWidth: Math.max(2400, Math.ceil(maxX) + 400),
-      blankHeight: Math.max(1600, Math.ceil(maxY) + 400),
-      state: {
-        points,
-        dataTypes,
-        selectedDataId: dataTypes[0] ? dataTypes[0].id : null,
-        pointMode: "lock",
-        showOrderLabels: false,
-        zoomLevel: 1,
-        commentImageData: "",
-        scrollLeft: 0,
-        scrollTop: 0
-      }
-    };
-
-    await ProjectDB.saveProject(project);
-    return project;
-  }
-
   function updateBackupStatus() {
     if (!els.backupStatus) return;
 
     let raw = null;
-    try { raw = localStorage.getItem("fm_lastBackupAt_new"); } catch (_) {}
+    try { raw = localStorage.getItem("fm_lastBackupAt"); } catch (_) {}
 
     if (!raw) {
       els.backupStatus.textContent =
@@ -967,7 +1122,7 @@ const App = (() => {
         `field-measurement-backup-${stamp}.json`
       );
 
-      try { localStorage.setItem("fm_lastBackupAt_new", String(Date.now())); } catch (_) {}
+      try { localStorage.setItem("fm_lastBackupAt", String(Date.now())); } catch (_) {}
       updateBackupStatus();
 
       alert(
@@ -998,11 +1153,14 @@ const App = (() => {
       return;
     }
 
+    if (isLegacyDataOnlyExport(backup) ||
+        ["field-measurement-file", "field-measurement-files"].includes(backup?.format)) {
+      alert("That is a single work file export, not a whole-library backup. Use \"Import File\" instead.");
+      return;
+    }
+
     if (!backup || backup.format !== "field-measurement-backup" || !backup.data) {
-      alert(
-        "That file is not a Field Measurement backup.\n\n" +
-        "For a single work file export, use Import File instead."
-      );
+      alert("That file is not a Field Measurement backup.");
       return;
     }
 
@@ -1120,7 +1278,7 @@ const App = (() => {
     if (typeof BroadcastChannel === "undefined") return;
 
     try {
-      const channel = new BroadcastChannel("field-measurement-tabs-new");
+      const channel = new BroadcastChannel("field-measurement-tabs");
       const myId = Math.random().toString(16).slice(2);
 
       channel.onmessage = event => {
