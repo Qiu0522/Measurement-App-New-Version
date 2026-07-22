@@ -72,6 +72,7 @@ const Workspace = (() => {
   let noteDrag = null;
   let textNoteColor = "#ff0000";
   let reviewFilter = "all";
+  let autoSortReviewFilter = "all";
   let currentSide = "";
   let setPositionPoint = null;
   let pendingExportTypes = null;
@@ -202,6 +203,7 @@ const Workspace = (() => {
     els.autoSortReviewModal = document.getElementById("autoSortReviewModal");
     els.autoSortReviewSummary = document.getElementById("autoSortReviewSummary");
     els.autoSortReviewChanges = document.getElementById("autoSortReviewChanges");
+    els.autoSortReviewFilters = document.getElementById("autoSortReviewFilters");
     els.autoSortReviewWarnings = document.getElementById("autoSortReviewWarnings");
     els.toggleSortReviewChangesBtn = document.getElementById("toggleSortReviewChangesBtn");
     els.toggleSortReviewWarningsBtn = document.getElementById("toggleSortReviewWarningsBtn");
@@ -2243,6 +2245,10 @@ const Workspace = (() => {
     element.style.top = point.y + "px";
     element.style.color = dataType?.color || "black";
     element.style.fontSize = labelFontSize + "px";
+    const reviewSidebarOpen = els.reviewSidebar && !els.reviewSidebar.classList.contains("hidden");
+    const visibleInReviewFilter = !reviewSidebarOpen || reviewFilter === "all" || point.dataId === reviewFilter;
+    element.classList.toggle("reviewFilteredOut", !visibleInReviewFilter);
+    element.setAttribute("aria-hidden", visibleInReviewFilter ? "false" : "true");
     element.classList.toggle("excludedPoint", !!point.excluded);
     element.classList.toggle("noSidePoint", !point.excluded && !(point.assignedSide || ""));
   }
@@ -3548,6 +3554,55 @@ const Workspace = (() => {
     return `<span class="sortReviewStat ${tone || ""}"><strong>${value}</strong><small>${label}</small></span>`;
   }
 
+  function renderAutoSortReviewFilters(review) {
+    if (!els.autoSortReviewFilters) return;
+    const typeMap = new Map();
+    (review.changes || []).forEach(change => {
+      if (!typeMap.has(change.dataId)) {
+        typeMap.set(change.dataId, {
+          id: change.dataId,
+          name: change.dataTypeName || "Data",
+          color: change.dataTypeColor || "#667085",
+          count: 0
+        });
+      }
+      typeMap.get(change.dataId).count += 1;
+    });
+
+    const types = Array.from(typeMap.values());
+    if (autoSortReviewFilter !== "all" && !typeMap.has(autoSortReviewFilter)) {
+      autoSortReviewFilter = "all";
+    }
+
+    els.autoSortReviewFilters.innerHTML = "";
+    els.autoSortReviewFilters.classList.toggle("hidden", types.length <= 1);
+    if (types.length <= 1) return;
+
+    const addChip = (value, label, color, count) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "sortReviewFilterChip" + (autoSortReviewFilter === value ? " active" : "");
+      chip.dataset.filter = value;
+      chip.innerHTML = `${color ? `<span class="sortReviewFilterDot" style="background:${escapeHTML(color)}"></span>` : ""}<span>${escapeHTML(label)}</span><small>${count}</small>`;
+      chip.addEventListener("click", () => {
+        autoSortReviewFilter = value;
+        applyAutoSortReviewFilter();
+        renderAutoSortReviewFilters(review);
+      });
+      els.autoSortReviewFilters.appendChild(chip);
+    };
+
+    addChip("all", "All", "", review.changes.length);
+    types.forEach(type => addChip(type.id, type.name, type.color, type.count));
+  }
+
+  function applyAutoSortReviewFilter() {
+    if (!els.autoSortReviewChanges) return;
+    els.autoSortReviewChanges.querySelectorAll(".sortReviewDataTypeGroup").forEach(group => {
+      group.classList.toggle("hidden", autoSortReviewFilter !== "all" && group.dataset.dataId !== autoSortReviewFilter);
+    });
+  }
+
   function openAutoSortReview(review) {
     if (!els.autoSortReviewModal) return;
     const unchanged = Math.max(0, review.checked - review.changes.length);
@@ -3588,6 +3643,7 @@ const Workspace = (() => {
         const dataType = getDataType(dataId);
         const group = document.createElement("section");
         group.className = "sortReviewDataTypeGroup";
+        group.dataset.dataId = dataId;
 
         const header = document.createElement("div");
         header.className = "sortReviewDataTypeHeader";
@@ -3620,6 +3676,9 @@ const Workspace = (() => {
       });
     }
 
+    renderAutoSortReviewFilters(review);
+    applyAutoSortReviewFilter();
+
     els.autoSortReviewWarnings.innerHTML = review.warnings.length ? "" : '<div class="sortReviewEmpty success"><span>✓</span><strong>No geometric warnings detected.</strong></div>';
     review.warnings.forEach(warning => {
       const row = document.createElement("button");
@@ -3639,6 +3698,7 @@ const Workspace = (() => {
   function cancelPendingAutoSortReview() {
     clearAutoSortReviewMarkers();
     pendingAutoSortReview = null;
+    autoSortReviewFilter = "all";
     document.body.classList.remove("sortReviewOpen");
     if (els.autoSortReviewModal) els.autoSortReviewModal.classList.add("hidden");
     setStatus("Auto Sort cancelled. No changes were applied.");
@@ -3658,6 +3718,7 @@ const Workspace = (() => {
     }
     clearAutoSortReviewMarkers();
     pendingAutoSortReview = null;
+    autoSortReviewFilter = "all";
     document.body.classList.remove("sortReviewOpen");
     els.autoSortReviewModal.classList.add("hidden");
     setStatus("Auto Sort applied. Side and Segment assignments were not changed.");
@@ -4882,8 +4943,13 @@ const Workspace = (() => {
 
     els.undoBtn.disabled = undoStack.length === 0;
     els.redoBtn.disabled = redoStack.length === 0;
-    els.undoBtn.title = undoStack.length ? "Undo" : "Nothing to undo";
-    els.redoBtn.title = redoStack.length ? "Redo" : "Nothing to redo";
+    const actionLabel = action => {
+      if (!action) return "";
+      if (action.type === "reorderBatch" || action.type === "reorderAreaBatch") return " Auto Sort";
+      return "";
+    };
+    els.undoBtn.title = undoStack.length ? `Undo${actionLabel(undoStack[undoStack.length - 1])}` : "Nothing to undo";
+    els.redoBtn.title = redoStack.length ? `Redo${actionLabel(redoStack[redoStack.length - 1])}` : "Nothing to redo";
   }
 
   function undo() {
@@ -5170,6 +5236,8 @@ const Workspace = (() => {
         new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
         fileName
       );
+      setStatus("CSV exported.");
+      showExportToast("CSV export complete", fileName);
     });
   }
 
@@ -5235,6 +5303,8 @@ const Workspace = (() => {
         new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
         fileName
       );
+      setStatus("CSV exported.");
+      showExportToast("CSV export complete", fileName);
     });
   }
 
@@ -5414,11 +5484,11 @@ const Workspace = (() => {
           .save();
       }
 
-      setStatus(
-        exportScale < 1
-          ? `PDF exported at ${Math.round(exportScale * 100)}% resolution for iPad compatibility.`
-          : "PDF exported."
-      );
+      const pdfStatus = exportScale < 1
+        ? `PDF exported at ${Math.round(exportScale * 100)}% resolution for iPad compatibility.`
+        : "PDF exported.";
+      setStatus(pdfStatus);
+      showExportToast("PDF export complete", fileName);
     } catch (error) {
       console.error("PDF export failed:", error);
       alert(
@@ -5528,7 +5598,9 @@ const Workspace = (() => {
       els.reviewSidebar.classList.remove("hidden");
     } else {
       els.reviewSidebar.classList.add("hidden");
+      reviewFilter = "all";
     }
+    points.forEach(updatePointElement);
   }
 
   function refreshReviewIfOpen() {
@@ -5576,6 +5648,7 @@ const Workspace = (() => {
       chip.addEventListener("click", () => {
         reviewFilter = value;
         renderReviewList();
+        points.forEach(updatePointElement);
       });
       return chip;
     };
@@ -5802,6 +5875,22 @@ const Workspace = (() => {
     if (!isDraggingPoint) {
       els.drawingWrapper.classList.remove("pointDragActive");
     }
+  }
+
+  function showExportToast(message, detail = "") {
+    let toast = document.getElementById("exportToast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "exportToast";
+      toast.className = "exportToast";
+      toast.setAttribute("role", "status");
+      toast.setAttribute("aria-live", "polite");
+      document.body.appendChild(toast);
+    }
+    toast.innerHTML = `<span class="exportToastIcon">✓</span><span><strong>${escapeHTML(message)}</strong>${detail ? `<small>${escapeHTML(detail)}</small>` : ""}</span>`;
+    toast.classList.add("show");
+    clearTimeout(showExportToast.timer);
+    showExportToast.timer = setTimeout(() => toast.classList.remove("show"), 3200);
   }
 
   function setStatus(message) {
