@@ -3414,6 +3414,16 @@ const Workspace = (() => {
     return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
+  function tagWarningDataType(warning, point) {
+    if (point) {
+      const dataType = getDataType(point.dataId);
+      warning.dataId = point.dataId;
+      warning.dataTypeName = dataType ? dataType.name : "Data";
+      warning.dataTypeColor = dataType ? dataType.color : "#667085";
+    }
+    return warning;
+  }
+
   function collectGroupWarnings(groups) {
     const warnings = [];
     const all = groups.flatMap(group => group.points);
@@ -3422,14 +3432,14 @@ const Workspace = (() => {
       for (let j = i + 1; j < all.length; j += 1) {
         const distance = Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y);
         if (distance < 10) {
-          warnings.push({ level: "high", uid: all[i].uid, text: `${pointDisplayName(all[i])} is almost overlapping another point.` });
+          warnings.push(tagWarningDataType({ level: "high", uid: all[i].uid, text: `${pointDisplayName(all[i])} is almost overlapping another point.` }, all[i]));
           break;
         }
       }
     }
     groups.forEach(group => {
       if (group.points.length === 1) {
-        warnings.push({ level: "info", uid: group.points[0].uid, text: `${group.label} contains only one point.` });
+        warnings.push(tagWarningDataType({ level: "info", uid: group.points[0].uid, text: `${group.label} contains only one point.` }, group.points[0]));
         return;
       }
       const cx = group.points.reduce((sum, p) => sum + p.x, 0) / group.points.length;
@@ -3439,7 +3449,7 @@ const Workspace = (() => {
       if (med > 0) {
         group.points.forEach((point, index) => {
           if (distances[index] > Math.max(30, med * 2.6)) {
-            warnings.push({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is far from the other points in ${group.label}. Check its Side/Segment manually.` });
+            warnings.push(tagWarningDataType({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is far from the other points in ${group.label}. Check its Side/Segment manually.` }, point));
           }
         });
       }
@@ -3450,7 +3460,7 @@ const Workspace = (() => {
       if (typicalGap > 0) {
         gaps.forEach((gap, index) => {
           if (gap > typicalGap * 3.5 && gap > 40) {
-            warnings.push({ level: "check", uid: ordered[index + 1].uid, text: `${group.label} has an unusually large gap. Check whether a point belongs to another Side/Segment.` });
+            warnings.push(tagWarningDataType({ level: "check", uid: ordered[index + 1].uid, text: `${group.label} has an unusually large gap. Check whether a point belongs to another Side/Segment.` }, ordered[index + 1]));
           }
         });
       }
@@ -3613,6 +3623,21 @@ const Workspace = (() => {
     els.autoSortReviewChanges.querySelectorAll(".sortReviewDataTypeGroup").forEach(group => {
       group.classList.toggle("hidden", autoSortReviewFilter !== "all" && group.dataset.dataId !== autoSortReviewFilter);
     });
+    if (els.autoSortReviewWarnings) {
+      els.autoSortReviewWarnings.querySelectorAll(".sortReviewDataTypeGroup").forEach(group => {
+        group.classList.toggle("hidden", autoSortReviewFilter !== "all" && group.dataset.dataId !== autoSortReviewFilter);
+      });
+    }
+  }
+
+  function buildWarningRow(warning) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `sortWarningRow ${warning.level}`;
+    row.innerHTML = `<span class="sortWarningIcon">${warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i"}</span><span class="sortReviewRowBody"><strong>${warning.text}</strong><small>${warning.level === "high" ? "High attention" : warning.level === "check" ? "Please verify manually" : "Information"}</small></span>${warning.uid ? '<span class="sortReviewLocate">Locate</span>' : ""}`;
+    if (warning.uid) row.addEventListener("click", () => focusReviewPoint(warning.uid, row));
+    else row.disabled = true;
+    return row;
   }
 
   function openAutoSortReview(review) {
@@ -3689,18 +3714,56 @@ const Workspace = (() => {
     }
 
     renderAutoSortReviewFilters(review);
-    applyAutoSortReviewFilter();
 
     els.autoSortReviewWarnings.innerHTML = review.warnings.length ? "" : '<div class="sortReviewEmpty success"><span>✓</span><strong>No geometric warnings detected.</strong></div>';
-    review.warnings.forEach(warning => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = `sortWarningRow ${warning.level}`;
-      row.innerHTML = `<span class="sortWarningIcon">${warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i"}</span><span class="sortReviewRowBody"><strong>${warning.text}</strong><small>${warning.level === "high" ? "High attention" : warning.level === "check" ? "Please verify manually" : "Information"}</small></span>${warning.uid ? '<span class="sortReviewLocate">Locate</span>' : ""}`;
-      if (warning.uid) row.addEventListener("click", () => focusReviewPoint(warning.uid, row));
-      else row.disabled = true;
-      els.autoSortReviewWarnings.appendChild(row);
-    });
+    if (review.warnings.length) {
+      // Warnings without a data type (e.g. a Segment-order preview note) have
+      // no single point to attribute to a color, so they render ungrouped
+      // above the per-Data-Type sections.
+      review.warnings.filter(warning => !warning.dataId).forEach(warning => {
+        els.autoSortReviewWarnings.appendChild(buildWarningRow(warning));
+      });
+
+      const groupedWarnings = new Map();
+      review.warnings.filter(warning => warning.dataId).forEach(warning => {
+        if (!groupedWarnings.has(warning.dataId)) groupedWarnings.set(warning.dataId, []);
+        groupedWarnings.get(warning.dataId).push(warning);
+      });
+
+      const orderedWarningKeys = [
+        ...dataTypes.map(dataType => dataType.id).filter(id => groupedWarnings.has(id)),
+        ...Array.from(groupedWarnings.keys()).filter(id => !dataTypes.some(dataType => dataType.id === id))
+      ];
+
+      orderedWarningKeys.forEach(dataId => {
+        const groupWarnings = groupedWarnings.get(dataId);
+        const dataType = getDataType(dataId);
+        const group = document.createElement("section");
+        group.className = "sortReviewDataTypeGroup";
+        group.dataset.dataId = dataId;
+
+        const header = document.createElement("div");
+        header.className = "sortReviewDataTypeHeader";
+        const dot = document.createElement("span");
+        dot.className = "sortReviewDataTypeDot";
+        dot.style.backgroundColor = dataType ? dataType.color : (groupWarnings[0].dataTypeColor || "#667085");
+        const name = document.createElement("strong");
+        name.textContent = dataType ? dataType.name : (groupWarnings[0].dataTypeName || "Data");
+        const count = document.createElement("small");
+        count.textContent = `${groupWarnings.length} warning${groupWarnings.length === 1 ? "" : "s"}`;
+        header.append(dot, name, count);
+        group.appendChild(header);
+
+        const rows = document.createElement("div");
+        rows.className = "sortReviewDataTypeRows";
+        groupWarnings.forEach(warning => rows.appendChild(buildWarningRow(warning)));
+        group.appendChild(rows);
+
+        els.autoSortReviewWarnings.appendChild(group);
+      });
+    }
+
+    applyAutoSortReviewFilter();
 
     els.autoSortReviewModal.classList.remove("hidden");
     document.body.classList.add("sortReviewOpen");
