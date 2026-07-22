@@ -2435,3 +2435,10 @@ button {
   .stickyReviewActions { padding-left: 14px; padding-right: 14px; }
 }
 
+
+/* Auto Sort Review refinements — v21 */
+.sortReviewArea { display:inline-flex; align-items:center; gap:8px; width:max-content; padding:6px 9px; border:1px solid #dbe4f2; border-radius:10px; background:#f6f8fc; }
+.sortReviewArea small { color:#748096; font-size:9px; font-weight:900; letter-spacing:.12em; }
+.sortReviewArea strong { color:#26364f; font-size:12px; }
+.sortReviewRowBody strong i { color:#8493aa; padding:0 3px; font-style:normal; }
+.sortReviewRow .sortReviewLocate { padding:6px 8px; border-radius:9px; background:#edf4ff; }

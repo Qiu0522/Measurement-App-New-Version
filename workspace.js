@@ -3439,7 +3439,7 @@ const Workspace = (() => {
     targetDataTypes.forEach(dt => changes.push(...compareSnapshotChanges(before[dt.id], after[dt.id])));
     const groups = targets.map(({ dt, side }) => ({ label: `${dt.name} · ${side}`, points: pointsInSide(dt.id, side) }));
     const checked = groups.reduce((sum, group) => sum + group.points.length, 0);
-    return { title: "Compass Auto Sort Review", context: `${direction === "clockwise" ? "Clockwise" : "Counterclockwise"} · Side assignments unchanged`, checked, changes, warnings: collectGroupWarnings(groups) };
+    return { title: "Compass Auto Sort Review", areaLabel: null, context: `${direction === "clockwise" ? "Clockwise" : "Counterclockwise"} · Side assignments unchanged`, checked, changes, warnings: collectGroupWarnings(groups) };
   }
 
   function buildAreaSortReview(area, targetSides, before, after, direction) {
@@ -3452,7 +3452,7 @@ const Workspace = (() => {
     if (beforeOrder && afterOrder && beforeOrder !== afterOrder) {
       warnings.unshift({ level: "info", uid: null, text: `Segment order preview: ${beforeOrder} → ${afterOrder}. No point was moved to another Segment.` });
     }
-    return { title: "Segment Auto Sort Review", context: `${area.name} · ${direction === "clockwise" ? "Clockwise" : "Counterclockwise"} · Segment assignments unchanged`, checked, changes, warnings };
+    return { title: "Segment Auto Sort Review", areaLabel: area.name, context: `${direction === "clockwise" ? "Clockwise" : "Counterclockwise"} · Segment assignments unchanged`, checked, changes, warnings };
   }
 
   function clearAutoSortReviewMarkers() {
@@ -3497,6 +3497,20 @@ const Workspace = (() => {
     button.textContent = active ? "Shown on drawing" : "Hidden on drawing";
   }
 
+  function formatReviewCode(side, seq) {
+    const cleanSide = side || "?";
+    const cleanSeq = seq ?? "?";
+    return `${cleanSide}-${cleanSeq}`;
+  }
+
+  function flashReviewElement(element) {
+    if (!element) return;
+    element.classList.add("sort-review-active");
+    void element.offsetWidth;
+    element.classList.add("sort-review-flash");
+    setTimeout(() => element.classList.remove("sort-review-flash"), 1000);
+  }
+
   function focusReviewPoint(uid, sourceRow) {
     const point = points.find(p => p.uid === uid);
     if (!point) return;
@@ -3508,13 +3522,29 @@ const Workspace = (() => {
     if (sourceRow) sourceRow.classList.add("selectedReviewRow");
     els.drawingArea.querySelectorAll(".point.sort-review-active").forEach(item => item.classList.remove("sort-review-active", "sort-review-flash"));
 
-    // Keep the drawing exactly where the reviewer left it. Clicking a review
-    // card only adds a short pulse to the existing marker; it never scrolls,
-    // recentres, or changes zoom.
-    element.classList.add("sort-review-active");
-    void element.offsetWidth;
-    element.classList.add("sort-review-flash");
-    setTimeout(() => element.classList.remove("sort-review-flash"), 900);
+    const wrapper = els.drawingWrapper;
+    const pointRect = element.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const margin = 28;
+    const visible = pointRect.left >= wrapperRect.left + margin &&
+      pointRect.right <= wrapperRect.right - margin &&
+      pointRect.top >= wrapperRect.top + margin &&
+      pointRect.bottom <= wrapperRect.bottom - margin;
+
+    if (visible) {
+      flashReviewElement(element);
+      return;
+    }
+
+    const targetLeft = Math.max(0, point.x * zoomLevel - wrapper.clientWidth / 2);
+    const targetTop = Math.max(0, point.y * zoomLevel - wrapper.clientHeight / 2);
+    if (typeof wrapper.scrollTo === "function") {
+      wrapper.scrollTo({ left: targetLeft, top: targetTop, behavior: "smooth" });
+    } else {
+      wrapper.scrollLeft = targetLeft;
+      wrapper.scrollTop = targetTop;
+    }
+    setTimeout(() => flashReviewElement(element), 320);
   }
 
   function createReviewStat(value, label, tone) {
@@ -3531,6 +3561,7 @@ const Workspace = (() => {
 
     els.autoSortReviewSummary.innerHTML = `
       <div class="sortReviewTitleRow"><strong>${review.title}</strong><span class="sortReviewReadyBadge">Ready to review</span></div>
+      ${review.areaLabel ? `<span class="sortReviewArea"><small>AREA</small><strong>${review.areaLabel}</strong></span>` : ""}
       <span class="sortReviewContext">${review.context}</span>
       <div class="sortReviewStats">
         ${createReviewStat(review.checked, "Checked", "neutral")}
@@ -3546,7 +3577,9 @@ const Workspace = (() => {
       row.type = "button";
       row.className = "sortReviewRow";
       row.dataset.reviewUid = change.uid;
-      row.innerHTML = `<span class="sortReviewRowIndex">${index + 1}</span><span class="sortReviewRowBody"><strong>${pointDisplayName(change.point, change.beforeSeq)}</strong><small>${change.side || "Unassigned"} assignment retained</small></span><span class="sortReviewChangePill"><b>${change.beforeSide || change.side}${change.beforeSeq ?? "?"}</b><i>→</i><b>${change.afterSide || change.side}${change.afterSeq ?? "?"}</b></span>`;
+      const beforeCode = formatReviewCode(change.beforeSide || change.side, change.beforeSeq);
+      const afterCode = formatReviewCode(change.afterSide || change.side, change.afterSeq);
+      row.innerHTML = `<span class="sortReviewRowIndex">${index + 1}</span><span class="sortReviewRowBody"><strong>${beforeCode} <i>→</i> ${afterCode}</strong><small>Click to locate this point</small></span><span class="sortReviewLocate">Locate</span>`;
       row.addEventListener("click", () => focusReviewPoint(change.uid, row));
       els.autoSortReviewChanges.appendChild(row);
     });
