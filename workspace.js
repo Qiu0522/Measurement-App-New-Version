@@ -3850,8 +3850,10 @@ const Workspace = (() => {
     workspaceMode = mode === "review" ? "review" : "measure";
 
     if (els.drawingToolsRow) {
-      els.drawingToolsRow.classList.toggle("mode-review", workspaceMode === "review");
-      els.drawingToolsRow.classList.toggle("mode-measure", workspaceMode === "measure");
+      // Always keep exactly one mode class. Auto Sort and Review Data are
+      // intentionally always visible, while only input/markup tools switch.
+      els.drawingToolsRow.classList.remove("mode-review", "mode-measure");
+      els.drawingToolsRow.classList.add(workspaceMode === "review" ? "mode-review" : "mode-measure");
     }
     if (els.measureModeBtn) {
       els.measureModeBtn.classList.toggle("active", workspaceMode === "measure");
@@ -3865,7 +3867,7 @@ const Workspace = (() => {
       pointMode = "lock";
       commentTool = "none";
       if (els.markupMenu) els.markupMenu.open = false;
-      setStatus("Review mode: refine order, labels and sides. Point input is locked.");
+      setStatus("Review mode: inspect data, refine order, labels and sides. Point input is locked.");
     } else {
       setStatus("Measure mode: place points and mark up the drawing.");
     }
