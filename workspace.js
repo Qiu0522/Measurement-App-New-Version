@@ -3392,46 +3392,88 @@ const Workspace = (() => {
 
   function collectGroupWarnings(groups) {
     const warnings = [];
+    const warned = new Set();
     const all = groups.flatMap(group => group.points);
-    // Nearly overlapping points, regardless of group.
+    const distanceBetween = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const addWarning = (warning, key = `${warning.uid || "none"}:${warning.text}`) => {
+      if (warned.has(key)) return;
+      warned.add(key);
+      warnings.push(warning);
+    };
+
+    // Nearly overlapping points, regardless of assigned group.
     for (let i = 0; i < all.length; i += 1) {
       for (let j = i + 1; j < all.length; j += 1) {
-        const distance = Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y);
-        if (distance < 10) {
-          warnings.push({ level: "high", uid: all[i].uid, text: `${pointDisplayName(all[i])} is almost overlapping another point.` });
-          break;
+        if (distanceBetween(all[i], all[j]) < 10) {
+          addWarning({ level: "high", uid: all[i].uid, text: `${pointDisplayName(all[i])} is almost overlapping another point.` }, `overlap:${all[i].uid}`);
+          addWarning({ level: "high", uid: all[j].uid, text: `${pointDisplayName(all[j])} is almost overlapping another point.` }, `overlap:${all[j].uid}`);
         }
       }
     }
-    groups.forEach(group => {
+
+    // Build a robust typical spacing for each group using nearest-neighbour
+    // distances. Unlike a mean centre, one wrong-side point cannot drag this
+    // reference far across the drawing.
+    const groupStats = groups.map(group => {
+      const nearestOwn = group.points.map(point => {
+        const others = group.points.filter(other => other.uid !== point.uid);
+        return others.length ? Math.min(...others.map(other => distanceBetween(point, other))) : Infinity;
+      });
+      const finiteOwn = nearestOwn.filter(Number.isFinite);
+      return {
+        group,
+        nearestOwn,
+        typicalOwnGap: median(finiteOwn)
+      };
+    });
+
+    groupStats.forEach(({ group, nearestOwn, typicalOwnGap }) => {
       if (group.points.length === 1) {
-        warnings.push({ level: "info", uid: group.points[0].uid, text: `${group.label} contains only one point.` });
+        addWarning({ level: "info", uid: group.points[0].uid, text: `${group.label} contains only one point.` }, `single:${group.points[0].uid}`);
         return;
       }
-      const cx = group.points.reduce((sum, p) => sum + p.x, 0) / group.points.length;
-      const cy = group.points.reduce((sum, p) => sum + p.y, 0) / group.points.length;
-      const distances = group.points.map(p => Math.hypot(p.x - cx, p.y - cy));
-      const med = median(distances);
-      if (med > 0) {
-        group.points.forEach((point, index) => {
-          if (distances[index] > Math.max(30, med * 2.6)) {
-            warnings.push({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is far from the other points in ${group.label}. Check its Side/Segment manually.` });
+
+      group.points.forEach((point, index) => {
+        const ownDistance = nearestOwn[index];
+
+        // Robust within-group outlier check. Require both a relative and an
+        // absolute separation so ordinary wide spacing does not create noise.
+        if (Number.isFinite(ownDistance) && typicalOwnGap > 0 && ownDistance > Math.max(45, typicalOwnGap * 2.8)) {
+          addWarning({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is unusually far from the nearest point in ${group.label}. Check its Side/Segment manually.` }, `own-far:${point.uid}`);
+        }
+
+        // Cross-group affinity check: warn when this point is substantially
+        // closer to another Side/Segment than to its assigned one. This catches
+        // cases such as a W point accidentally labelled E, without changing it.
+        let nearestOtherDistance = Infinity;
+        let nearestOtherLabel = "";
+        groupStats.forEach(otherStat => {
+          if (otherStat.group === group || !otherStat.group.points.length) return;
+          const candidate = Math.min(...otherStat.group.points.map(other => distanceBetween(point, other)));
+          if (candidate < nearestOtherDistance) {
+            nearestOtherDistance = candidate;
+            nearestOtherLabel = otherStat.group.label;
           }
         });
-      }
+        if (Number.isFinite(ownDistance) && Number.isFinite(nearestOtherDistance) &&
+            nearestOtherDistance + 20 < ownDistance && nearestOtherDistance < ownDistance * 0.68) {
+          addWarning({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is much closer to ${nearestOtherLabel} than to its assigned group. Check the Side/Segment manually.` }, `closer-other:${point.uid}`);
+        }
+      });
+
       const ordered = principalAxisSort(group.points);
       const gaps = [];
-      for (let i = 1; i < ordered.length; i += 1) gaps.push(Math.hypot(ordered[i].x - ordered[i-1].x, ordered[i].y - ordered[i-1].y));
+      for (let i = 1; i < ordered.length; i += 1) gaps.push(distanceBetween(ordered[i], ordered[i - 1]));
       const typicalGap = median(gaps);
       if (typicalGap > 0) {
         gaps.forEach((gap, index) => {
-          if (gap > typicalGap * 3.5 && gap > 40) {
-            warnings.push({ level: "check", uid: ordered[index + 1].uid, text: `${group.label} has an unusually large gap. Check whether a point belongs to another Side/Segment.` });
+          if (gap > Math.max(50, typicalGap * 3.2)) {
+            addWarning({ level: "check", uid: ordered[index + 1].uid, text: `${group.label} has an unusually large gap. Check whether a point belongs to another Side/Segment.` }, `large-gap:${ordered[index + 1].uid}`);
           }
         });
       }
     });
-    return warnings.slice(0, 30);
+    return warnings.slice(0, 40);
   }
 
   function buildCompassSortReview(targetDataTypes, targets, before, after, direction) {
@@ -3511,7 +3553,7 @@ const Workspace = (() => {
     setTimeout(() => element.classList.remove("sort-review-flash"), 1000);
   }
 
-  function focusReviewPoint(uid, sourceRow) {
+  function focusReviewPoint(uid, sourceRow, options = {}) {
     const point = points.find(p => p.uid === uid);
     if (!point) return;
     const element = findPointElement(uid);
@@ -3521,6 +3563,13 @@ const Workspace = (() => {
     document.querySelectorAll(".sortReviewRow.selectedReviewRow, .sortWarningRow.selectedReviewRow").forEach(row => row.classList.remove("selectedReviewRow"));
     if (sourceRow) sourceRow.classList.add("selectedReviewRow");
     els.drawingArea.querySelectorAll(".point.sort-review-active").forEach(item => item.classList.remove("sort-review-active", "sort-review-flash"));
+
+    // Warning review must never move the drawing. Changes can still locate an
+    // off-screen point, while an in-view point only flashes in place.
+    if (options.flashOnly) {
+      flashReviewElement(element);
+      return;
+    }
 
     const wrapper = els.drawingWrapper;
     const pointRect = element.getBoundingClientRect();
@@ -3589,8 +3638,8 @@ const Workspace = (() => {
       const row = document.createElement("button");
       row.type = "button";
       row.className = `sortWarningRow ${warning.level}`;
-      row.innerHTML = `<span class="sortWarningIcon">${warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i"}</span><span class="sortReviewRowBody"><strong>${warning.text}</strong><small>${warning.level === "high" ? "High attention" : warning.level === "check" ? "Please verify manually" : "Information"}</small></span>${warning.uid ? '<span class="sortReviewLocate">Flash</span>' : ""}`;
-      if (warning.uid) row.addEventListener("click", () => focusReviewPoint(warning.uid, row));
+      row.innerHTML = `<span class="sortWarningIcon">${warning.level === "high" ? "!" : warning.level === "check" ? "!" : "i"}</span><span class="sortReviewRowBody"><strong>${warning.text}</strong><small>${warning.level === "high" ? "High attention" : warning.level === "check" ? "Please verify manually" : "Information"}</small></span>${warning.uid ? '<span class="sortReviewLocate">Flash only</span>' : ""}`;
+      if (warning.uid) row.addEventListener("click", () => focusReviewPoint(warning.uid, row, { flashOnly: true }));
       else row.disabled = true;
       els.autoSortReviewWarnings.appendChild(row);
     });
