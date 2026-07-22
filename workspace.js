@@ -2245,10 +2245,6 @@ const Workspace = (() => {
     element.style.top = point.y + "px";
     element.style.color = dataType?.color || "black";
     element.style.fontSize = labelFontSize + "px";
-    const reviewSidebarOpen = els.reviewSidebar && !els.reviewSidebar.classList.contains("hidden");
-    const visibleInReviewFilter = !reviewSidebarOpen || reviewFilter === "all" || point.dataId === reviewFilter;
-    element.classList.toggle("reviewFilteredOut", !visibleInReviewFilter);
-    element.setAttribute("aria-hidden", visibleInReviewFilter ? "false" : "true");
     element.classList.toggle("excludedPoint", !!point.excluded);
     element.classList.toggle("noSidePoint", !point.excluded && !(point.assignedSide || ""));
   }
@@ -3850,10 +3846,8 @@ const Workspace = (() => {
     workspaceMode = mode === "review" ? "review" : "measure";
 
     if (els.drawingToolsRow) {
-      // Always keep exactly one mode class. Auto Sort and Review Data are
-      // intentionally always visible, while only input/markup tools switch.
-      els.drawingToolsRow.classList.remove("mode-review", "mode-measure");
-      els.drawingToolsRow.classList.add(workspaceMode === "review" ? "mode-review" : "mode-measure");
+      els.drawingToolsRow.classList.toggle("mode-review", workspaceMode === "review");
+      els.drawingToolsRow.classList.toggle("mode-measure", workspaceMode === "measure");
     }
     if (els.measureModeBtn) {
       els.measureModeBtn.classList.toggle("active", workspaceMode === "measure");
@@ -3867,7 +3861,7 @@ const Workspace = (() => {
       pointMode = "lock";
       commentTool = "none";
       if (els.markupMenu) els.markupMenu.open = false;
-      setStatus("Review mode: inspect data, refine order, labels and sides. Point input is locked.");
+      setStatus("Review mode: refine order, labels and sides. Point input is locked.");
     } else {
       setStatus("Measure mode: place points and mark up the drawing.");
     }
@@ -5596,9 +5590,7 @@ const Workspace = (() => {
       els.reviewSidebar.classList.remove("hidden");
     } else {
       els.reviewSidebar.classList.add("hidden");
-      reviewFilter = "all";
     }
-    points.forEach(updatePointElement);
   }
 
   function refreshReviewIfOpen() {
@@ -5646,7 +5638,6 @@ const Workspace = (() => {
       chip.addEventListener("click", () => {
         reviewFilter = value;
         renderReviewList();
-        points.forEach(updatePointElement);
       });
       return chip;
     };
