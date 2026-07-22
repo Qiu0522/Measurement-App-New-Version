@@ -17,6 +17,7 @@ const Workspace = (() => {
   let points = [];
   let dataTypes = [];
   let areas = [];
+  let sharedSegments = ["1"];
   let currentAreaId = null;
 
   let pointMode = "lock";
@@ -905,9 +906,21 @@ const Workspace = (() => {
 
     const isAreaProjectLoad = project.sideMode === "flexible";
     areas = isAreaProjectLoad ? clone(initialPageState.areas || DEFAULT_AREAS) : [];
+    const migratedSegments = [];
+    const rememberSegment = value => {
+      const name = String(value || "").trim();
+      if (name && !migratedSegments.includes(name)) migratedSegments.push(name);
+    };
+    (state.sharedSegments || []).forEach(rememberSegment);
+    areas.forEach(area => (area.sideTags || []).forEach(rememberSegment));
+    sharedSegments = isAreaProjectLoad ? (migratedSegments.length ? migratedSegments : ["1"]) : [];
     areas.forEach(area => {
-      if (!Array.isArray(area.sideTags) || !area.sideTags.length) area.sideTags = ["1"];
-      if (!area.lastSelectedSide || !area.sideTags.includes(area.lastSelectedSide)) area.lastSelectedSide = area.sideTags[0];
+      // Segment names are shared by the whole project. Each Area keeps its own
+      // order and point assignments, while receiving any missing shared names.
+      const localOrder = Array.isArray(area.sideTags) ? area.sideTags.filter(name => sharedSegments.includes(name)) : [];
+      sharedSegments.forEach(name => { if (!localOrder.includes(name)) localOrder.push(name); });
+      area.sideTags = localOrder.length ? localOrder : sharedSegments.slice();
+      if (!area.lastSelectedSide || !sharedSegments.includes(area.lastSelectedSide)) area.lastSelectedSide = sharedSegments[0] || "";
       if (!Array.isArray(area.lockedSides)) area.lockedSides = [];
     });
     currentAreaId = isAreaProjectLoad
@@ -1851,7 +1864,7 @@ const Workspace = (() => {
 
   function openAddAreaModal() {
     els.areaNameInput.value = "New Area";
-    els.inheritSidesHint.textContent = "New Areas start with Segment 1. Add or rename Segments in Manage Segments.";
+    els.inheritSidesHint.textContent = "New Areas automatically use the project’s shared Segment list.";
     els.manageAreasModal.classList.add("hidden");
     els.areaModal.classList.remove("hidden");
   }
@@ -1863,8 +1876,8 @@ const Workspace = (() => {
     const id = "area_" + Date.now();
     const area = {
       id, name,
-      sideTags: ["1"],
-      lastSelectedSide: "1",
+      sideTags: sharedSegments.length ? sharedSegments.slice() : ["1"],
+      lastSelectedSide: sharedSegments[0] || "1",
       lockedSides: []
     };
 
@@ -2670,7 +2683,13 @@ const Workspace = (() => {
   }
 
   function sidesForArea(area) {
-    return area ? (area.sideTags || []).slice() : [];
+    if (!area) return [];
+    if (project && project.sideMode === "flexible") {
+      if (!Array.isArray(area.sideTags)) area.sideTags = [];
+      sharedSegments.forEach(name => { if (!area.sideTags.includes(name)) area.sideTags.push(name); });
+      area.sideTags = area.sideTags.filter(name => sharedSegments.includes(name));
+    }
+    return (area.sideTags || []).slice();
   }
 
   function isAreaSideLocked(area, side) {
@@ -3755,7 +3774,7 @@ const Workspace = (() => {
     els.flexibleSideRow.innerHTML = "";
     if (!area) return;
 
-    (area.sideTags || []).forEach(side => {
+    sidesForArea(area).forEach(side => {
       const tag = document.createElement("button");
       tag.type = "button";
       tag.className = "sideTag" + (side === currentSide ? " activeSide" : "");
@@ -3802,20 +3821,23 @@ const Workspace = (() => {
   }
 
   function confirmAddFlexibleSideTag() {
-    const area = getArea(pendingSideNameAreaId);
     const name = els.sideNameInput.value.trim();
-    if (!area) return;
     if (!name) {
       alert("Enter a Segment name.");
       return;
     }
-    if (!Array.isArray(area.sideTags)) area.sideTags = [];
-    if (area.sideTags.includes(name)) {
-      alert(`A Segment named "${name}" already exists in this Area.`);
+    if (sharedSegments.includes(name)) {
+      alert(`A shared Segment named "${name}" already exists.`);
       return;
     }
 
-    area.sideTags.push(name);
+    sharedSegments.push(name);
+    areas.forEach(area => {
+      if (!Array.isArray(area.sideTags)) area.sideTags = [];
+      if (!area.sideTags.includes(name)) area.sideTags.push(name);
+      if (!area.lastSelectedSide) area.lastSelectedSide = name;
+    });
+
     els.sideNameModal.classList.add("hidden");
     pendingSideNameAreaId = null;
     renderSidePanelForCurrentArea();
@@ -3830,25 +3852,26 @@ const Workspace = (() => {
   }
 
   function removeFlexibleSideTag(area, side) {
-    if ((area.sideTags || []).length <= 1) {
-      alert("Each Area needs at least one Segment.");
+    if (sharedSegments.length <= 1) {
+      alert("The project needs at least one shared Segment.");
       return;
     }
-    const count = points.filter(p => p.areaId === area.id && p.assignedSide === side).length;
-
-    const message = count
-      ? `Segment "${side}" in "${area.name}" has ${count} point(s). Deleting it will permanently delete those points. Continue?`
-      : `Delete Segment "${side}" from "${area.name}"?`;
-
+    const affected = points.filter(p => p.assignedSide === side);
+    const areaCount = new Set(affected.map(p => p.areaId)).size;
+    const message = affected.length
+      ? `Shared Segment "${side}" is used by ${affected.length} point(s) across ${areaCount} Area(s). Deleting it removes those points from the whole project. Continue?`
+      : `Delete shared Segment "${side}" from the whole project?`;
     if (!confirm(message)) return;
 
-    points.forEach(point => {
-      if (point.areaId === area.id && point.assignedSide === side) removePointElement(point.uid);
+    affected.forEach(point => removePointElement(point.uid));
+    points = points.filter(p => p.assignedSide !== side);
+    sharedSegments = sharedSegments.filter(name => name !== side);
+    areas.forEach(item => {
+      item.sideTags = (item.sideTags || []).filter(name => name !== side);
+      item.lockedSides = (item.lockedSides || []).filter(name => name !== side);
+      if (item.lastSelectedSide === side) item.lastSelectedSide = sharedSegments[0] || "";
     });
-    points = points.filter(p => !(p.areaId === area.id && p.assignedSide === side));
-    area.sideTags = (area.sideTags || []).filter(s => s !== side);
-    if (area.lastSelectedSide === side) area.lastSelectedSide = "";
-    if (currentSide === side) currentSide = "";
+    if (currentSide === side) currentSide = sharedSegments[0] || "";
 
     renderSidePanelForCurrentArea();
     renderBatchSideChoices();
@@ -3860,7 +3883,7 @@ const Workspace = (() => {
   function getAvailableSides() {
     if (project && project.sideMode === "flexible") {
       const area = getArea(currentAreaId);
-      return area && Array.isArray(area.sideTags) ? area.sideTags.slice() : [];
+      return area ? sidesForArea(area) : sharedSegments.slice();
     }
     return ["N", "E", "S", "W"];
   }
@@ -3890,7 +3913,7 @@ const Workspace = (() => {
     let sides;
     if (project && project.sideMode === "flexible" && contextPoint) {
       const area = getArea(contextPoint.areaId);
-      sides = area && Array.isArray(area.sideTags) ? area.sideTags : [];
+      sides = area ? sidesForArea(area) : sharedSegments.slice();
     } else {
       sides = ["N", "E", "S", "W"];
     }
@@ -3914,8 +3937,8 @@ const Workspace = (() => {
     const area = getArea(currentAreaId);
     els.manageSegmentsList.innerHTML = "";
     if (!area) return;
-    els.manageSegmentsHint.textContent = `Segments for ${area.name}. Their order is also used for review and export.`;
-    const tags = Array.isArray(area.sideTags) ? area.sideTags : [];
+    els.manageSegmentsHint.textContent = "Shared Segments are visible in every Area. Empty Segments are ignored by sorting and export.";
+    const tags = sharedSegments.slice();
     tags.forEach((side, index) => {
       const row = document.createElement("div");
       row.className = "manageDataTypeRow";
@@ -3928,8 +3951,8 @@ const Workspace = (() => {
 
       const count = document.createElement("span");
       count.className = "manageDataTypeCount";
-      const pointCount = points.filter(p => p.areaId === area.id && p.assignedSide === side).length;
-      count.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
+      const pointCount = points.filter(p => p.assignedSide === side).length;
+      count.textContent = pointCount === 1 ? "1 point total" : `${pointCount} points total`;
 
       const up = document.createElement("button");
       up.type = "button"; up.textContent = "↑"; up.title = "Move up"; up.disabled = index === 0;
@@ -3949,28 +3972,35 @@ const Workspace = (() => {
   function renameSegment(area, oldName, proposedName) {
     const name = (proposedName || "").trim();
     if (!name || name === oldName) { renderManageSegmentsList(); return; }
-    if (area.sideTags.includes(name)) { alert(`A Segment named "${name}" already exists.`); renderManageSegmentsList(); return; }
-    const index = area.sideTags.indexOf(oldName);
-    if (index < 0) return;
-    area.sideTags[index] = name;
-    points.forEach(point => {
-      if (point.areaId === area.id && point.assignedSide === oldName) point.assignedSide = name;
+    if (sharedSegments.includes(name)) { alert(`A shared Segment named "${name}" already exists.`); renderManageSegmentsList(); return; }
+    const sharedIndex = sharedSegments.indexOf(oldName);
+    if (sharedIndex < 0) return;
+    sharedSegments[sharedIndex] = name;
+    areas.forEach(item => {
+      item.sideTags = (item.sideTags || []).map(value => value === oldName ? name : value);
+      item.lockedSides = (item.lockedSides || []).map(value => value === oldName ? name : value);
+      if (item.lastSelectedSide === oldName) item.lastSelectedSide = name;
     });
-    if (area.lastSelectedSide === oldName) area.lastSelectedSide = name;
-    if (currentAreaId === area.id && currentSide === oldName) currentSide = name;
+    points.forEach(point => { if (point.assignedSide === oldName) point.assignedSide = name; });
+    if (currentSide === oldName) currentSide = name;
     renderSidePanelForCurrentArea();
     renderBatchSideChoices();
     refreshAllPoints();
-    recalculateAreaOrder(area.id);
+    areas.forEach(item => recalculateAreaOrder(item.id));
     scheduleAutoSave();
     renderManageSegmentsList();
   }
 
   function moveSegment(area, index, delta) {
     const next = index + delta;
-    if (next < 0 || next >= area.sideTags.length) return;
-    [area.sideTags[index], area.sideTags[next]] = [area.sideTags[next], area.sideTags[index]];
-    recalculateAreaOrder(area.id);
+    if (next < 0 || next >= sharedSegments.length) return;
+    [sharedSegments[index], sharedSegments[next]] = [sharedSegments[next], sharedSegments[index]];
+    areas.forEach(item => {
+      const local = (item.sideTags || []).filter(name => sharedSegments.includes(name));
+      item.sideTags = sharedSegments.filter(name => local.includes(name));
+      sharedSegments.forEach(name => { if (!item.sideTags.includes(name)) item.sideTags.push(name); });
+      recalculateAreaOrder(item.id);
+    });
     renderSidePanelForCurrentArea();
     renderBatchSideChoices();
     refreshAllPoints();
@@ -5355,6 +5385,7 @@ const Workspace = (() => {
       currentPdfPage,
       dataTypes,
       areas,
+      sharedSegments,
       textNotes,
       pointMode,
       showOrderLabels,
