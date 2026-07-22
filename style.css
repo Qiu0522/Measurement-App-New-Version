@@ -2466,3 +2466,36 @@ button {
 .exportToast strong { font-size:12px; }
 .exportToast small { overflow:hidden; color:#668072; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
 @media (max-width:700px) { .exportToast { right:12px; bottom:12px; left:12px; max-width:none; } }
+
+
+/* v28: normal Review mode data-type display filter */
+.reviewDataTypeFilterWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 1px solid var(--border, #d8dde6);
+  border-radius: 9px;
+  background: #fff;
+}
+.reviewFilterEye {
+  color: var(--primary, #276ef1);
+  font-size: 13px;
+}
+.reviewDataTypeFilter {
+  max-width: 210px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text, #1f2937);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.point.reviewFilteredOut {
+  display: none !important;
+}
+@media (max-width: 900px) {
+  .reviewDataTypeFilter { max-width: 150px; }
+}
