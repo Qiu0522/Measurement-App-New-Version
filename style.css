@@ -2448,3 +2448,21 @@ button {
 .sortReviewArea strong { color:#26364f; font-size:12px; }
 .sortReviewRowBody strong i { color:#8493aa; padding:0 3px; font-style:normal; }
 .sortReviewRow .sortReviewLocate { padding:6px 8px; border-radius:9px; background:#edf4ff; }
+
+
+/* v27: Auto Sort filters, library activity, and export feedback */
+.sortReviewFilterBar { display:flex; gap:7px; overflow-x:auto; padding:0 2px 10px; scrollbar-width:thin; }
+.sortReviewFilterChip { flex:none; display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:6px 9px; border:1px solid #dce3ed; border-radius:999px; color:#5f6b7d; background:#fff; font-size:11px; font-weight:800; }
+.sortReviewFilterChip small { min-width:18px; padding:2px 5px; border-radius:999px; color:#738096; background:#f0f3f7; font-size:9px; text-align:center; }
+.sortReviewFilterChip.active { color:#2459b8; border-color:#b9cdf3; background:#edf4ff; box-shadow:0 0 0 2px rgba(66,110,190,.08); }
+.sortReviewFilterDot { width:9px; height:9px; border-radius:50%; box-shadow:0 0 0 2px rgba(148,163,184,.18); }
+.projectActivity { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin-top:2px; }
+.projectModifiedBadge { display:inline-flex; align-items:center; min-height:22px; padding:3px 7px; border-radius:999px; color:#376248; background:#edf7f1; font-size:10px; font-weight:800; }
+.projectActivity .projectUpdated { margin:0; }
+.exportToast { position:fixed; right:20px; bottom:20px; z-index:5000; display:flex; align-items:center; gap:10px; min-width:240px; max-width:min(390px, calc(100vw - 32px)); padding:12px 14px; border:1px solid #cde8d7; border-radius:14px; color:#244333; background:rgba(244,252,247,.97); box-shadow:0 18px 46px rgba(31,64,45,.2); opacity:0; transform:translateY(16px); pointer-events:none; transition:opacity .18s ease, transform .18s ease; }
+.exportToast.show { opacity:1; transform:translateY(0); }
+.exportToastIcon { display:grid; place-items:center; flex:none; width:30px; height:30px; border-radius:50%; color:#fff; background:#35a269; font-weight:900; }
+.exportToast > span:last-child { min-width:0; display:grid; gap:2px; }
+.exportToast strong { font-size:12px; }
+.exportToast small { overflow:hidden; color:#668072; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+@media (max-width:700px) { .exportToast { right:12px; bottom:12px; left:12px; max-width:none; } }

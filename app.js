@@ -298,12 +298,19 @@ const App = (() => {
 
     const pointCount = project.state?.points?.length || 0;
 
+    const activity = document.createElement("div");
+    activity.className = "projectActivity";
+
+    const modifiedBadge = document.createElement("span");
+    modifiedBadge.className = "projectModifiedBadge";
+    modifiedBadge.textContent = formatModifiedLabel(project.updatedAt);
+
     const updated = document.createElement("p");
     updated.className = "projectUpdated";
-    updated.textContent =
-      `${pointCount} points · Updated ${formatDate(project.updatedAt)}`;
+    updated.textContent = `${pointCount} points · ${formatDate(project.updatedAt)}`;
 
-    openArea.append(preview, title, meta, updated);
+    activity.append(modifiedBadge, updated);
+    openArea.append(preview, title, meta, activity);
     openArea.addEventListener("click", () => {
       if (fileSelectionMode) toggleProjectSelection(project.id);
       else openProject(project.id);
@@ -1182,6 +1189,19 @@ const App = (() => {
       Math.max(8, Math.min(y, window.innerHeight - height - 8)) + "px";
 
     menu.classList.remove("hidden");
+  }
+
+  function formatModifiedLabel(timestamp) {
+    if (!timestamp) return "Modified";
+    const date = new Date(timestamp);
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const days = Math.round((startToday - startDate) / 86400000);
+    if (days === 0) return "Modified today";
+    if (days === 1) return "Modified yesterday";
+    if (days < 7) return `Modified ${days} days ago`;
+    return `Modified ${date.toLocaleDateString([], { month: "short", day: "numeric" })}`;
   }
 
   function formatDate(timestamp) {

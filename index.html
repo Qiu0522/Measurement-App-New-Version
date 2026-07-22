@@ -333,7 +333,7 @@
 
       <div class="sortReviewGuide">
         <span class="sortReviewGuideIcon">⌖</span>
-        <span>Select a number change to centre its point, then flash it in place. Warning rows only flash and never move the drawing. Review markers are temporary and will not appear in exports.</span>
+        <span>Select a change or warning to centre its point, then flash it in place. The number label stays attached to its original drawing position. Review markers are temporary and will not appear in exports.</span>
       </div>
 
       <section class="sortReviewSection">
@@ -344,6 +344,7 @@
           </div>
           <button id="toggleSortReviewChangesBtn" class="sortReviewToggle active" type="button" aria-pressed="true">Show on drawing</button>
         </div>
+        <div id="autoSortReviewFilters" class="sortReviewFilterBar hidden" aria-label="Filter number changes by data type"></div>
         <div id="autoSortReviewChanges" class="sortReviewList"></div>
       </section>
 
