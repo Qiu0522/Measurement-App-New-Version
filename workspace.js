@@ -163,8 +163,6 @@ const Workspace = (() => {
     els.orderBtn = document.getElementById("orderBtn");
     els.measureModeBtn = document.getElementById("measureModeBtn");
     els.reviewModeBtn = document.getElementById("reviewModeBtn");
-    els.reviewDataTypeFilter = document.getElementById("reviewDataTypeFilter");
-    els.reviewDataTypeFilterWrap = document.getElementById("reviewDataTypeFilterWrap");
     els.drawingToolsRow = document.querySelector(".drawingTools");
     els.dataTypeSwatch = document.getElementById("dataTypeSwatch");
     els.batchAssignBtn = document.getElementById("batchAssignBtn");
@@ -432,16 +430,6 @@ const Workspace = (() => {
     }
     if (els.reviewModeBtn) {
       els.reviewModeBtn.addEventListener("click", () => setWorkspaceMode("review"));
-    }
-    if (els.reviewDataTypeFilter) {
-      els.reviewDataTypeFilter.addEventListener("change", () => {
-        reviewFilter = els.reviewDataTypeFilter.value || "all";
-        refreshAllPoints();
-        const selected = reviewFilter === "all" ? null : getDataType(reviewFilter);
-        setStatus(selected
-          ? `Review mode: showing only ${selected.name}. This is a display filter only.`
-          : "Review mode: showing all data types.");
-      });
     }
     els.batchAssignBtn.addEventListener("click", startBatchAssign);
     renderBatchSideChoices();
@@ -988,7 +976,6 @@ const Workspace = (() => {
     renderAreaDataTypePickerLabel();
     renderBatchSideChoices();
     reviewFilter = "all";
-    renderReviewDataTypeFilter();
     updateNoSideBanner();
     setWorkspaceMode("measure");
 
@@ -2258,9 +2245,10 @@ const Workspace = (() => {
     element.style.top = point.y + "px";
     element.style.color = dataType?.color || "black";
     element.style.fontSize = labelFontSize + "px";
-    const visibleInReview = workspaceMode !== "review" || reviewFilter === "all" || point.dataId === reviewFilter;
-    element.classList.toggle("reviewFilteredOut", !visibleInReview);
-    element.setAttribute("aria-hidden", visibleInReview ? "false" : "true");
+    const reviewSidebarOpen = els.reviewSidebar && !els.reviewSidebar.classList.contains("hidden");
+    const visibleInReviewFilter = !reviewSidebarOpen || reviewFilter === "all" || point.dataId === reviewFilter;
+    element.classList.toggle("reviewFilteredOut", !visibleInReviewFilter);
+    element.setAttribute("aria-hidden", visibleInReviewFilter ? "false" : "true");
     element.classList.toggle("excludedPoint", !!point.excluded);
     element.classList.toggle("noSidePoint", !point.excluded && !(point.assignedSide || ""));
   }
@@ -3873,7 +3861,6 @@ const Workspace = (() => {
     }
 
     if (workspaceMode === "review") {
-      renderReviewDataTypeFilter();
       // Review locks input: no new points, no active markup tool.
       pointMode = "lock";
       commentTool = "none";
@@ -3884,31 +3871,6 @@ const Workspace = (() => {
     }
 
     updateToolButtons();
-    refreshAllPoints();
-  }
-
-  function renderReviewDataTypeFilter() {
-    if (!els.reviewDataTypeFilter) return;
-
-    const previous = dataTypes.some(dataType => dataType.id === reviewFilter)
-      ? reviewFilter
-      : "all";
-    els.reviewDataTypeFilter.innerHTML = "";
-
-    const allOption = document.createElement("option");
-    allOption.value = "all";
-    allOption.textContent = "All Data Types";
-    els.reviewDataTypeFilter.appendChild(allOption);
-
-    dataTypes.forEach(dataType => {
-      const option = document.createElement("option");
-      option.value = dataType.id;
-      option.textContent = `${dataType.name} (${points.filter(point => point.dataId === dataType.id).length})`;
-      els.reviewDataTypeFilter.appendChild(option);
-    });
-
-    reviewFilter = previous;
-    els.reviewDataTypeFilter.value = previous;
   }
 
   function setCurrentSide(side) {
@@ -5632,7 +5594,9 @@ const Workspace = (() => {
       els.reviewSidebar.classList.remove("hidden");
     } else {
       els.reviewSidebar.classList.add("hidden");
+      reviewFilter = "all";
     }
+    points.forEach(updatePointElement);
   }
 
   function refreshReviewIfOpen() {
@@ -5680,6 +5644,7 @@ const Workspace = (() => {
       chip.addEventListener("click", () => {
         reviewFilter = value;
         renderReviewList();
+        points.forEach(updatePointElement);
       });
       return chip;
     };
@@ -5892,7 +5857,6 @@ const Workspace = (() => {
 
   function refreshAllPoints() {
     points.forEach(updatePointElement);
-    if (workspaceMode === "review") renderReviewDataTypeFilter();
     refreshReviewIfOpen();
   }
 
