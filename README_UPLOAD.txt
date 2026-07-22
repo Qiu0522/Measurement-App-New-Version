@@ -1,3 +1,29 @@
+FIELD MEASUREMENT VERSION 6.9.2
+
+VERSION 6.9.2 — AUTO SORT REVIEW: FIXED REPETITIVE WARNINGS
+- The "almost overlapping" check now compares points only within the same
+  side, not across all selected sides at once. Previously, the last point
+  of one side and the first point of the next side (which sit close
+  together at a shared corner on purpose) were flagged as an error at
+  every corner, every time — that's what caused the repeated warnings.
+- Each point can now contribute at most one warning (the most severe one)
+  instead of potentially showing up under "overlapping," "far from other
+  points," and "large gap" all at once with near-identical wording.
+- sw.js CACHE_VERSION bumped to v1-v2-21-warning-fix.
+
+FIELD MEASUREMENT VERSION 6.9.1
+
+VERSION 6.9.1 — AUTO SORT SWITCHED BACK TO ANGLE-BASED ORDERING
+- Auto Sort's straight-axis (PCA) ordering has been replaced with
+  angle-around-centre ordering (the same approach the app used before this
+  round of merges). Points on a curved/bowed wall were coming out of order
+  near the bend under the straight-axis method (e.g. E4/E5 and E6/E7
+  swapped on a rounding wall) because it projects the whole side onto one
+  straight line rather than following the curve.
+- sw.js CACHE_VERSION bumped to v1-v2-20-autosort-angle.
+- Auto Sort Review, the Review-mode data type filter, the library
+  "Modified" badge, and export toasts from 6.9 are unchanged.
+
 FIELD MEASUREMENT VERSION 6.9
 
 VERSION 6.9 — AUTO SORT REVIEW + REVIEW DATA TYPE FILTER + WORKFLOW POLISH

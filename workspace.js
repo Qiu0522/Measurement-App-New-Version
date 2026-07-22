@@ -2082,54 +2082,60 @@ const Workspace = (() => {
   }
 
   /*
-    Orders a group of points along their principal axis (the direction of
-    greatest spread, found via a quick PCA on the point cloud) rather than
-    forcing a plain left-right or top-bottom coordinate sort. This handles
-    both straight walls and gently curved/arced walls with a single
-    algorithm, so the operator no longer has to pick a "straight" vs
-    "curved" method up front.
+    Angle-based ordering for walls, straight or curved, where a plain
+    left-right/top-bottom coordinate sort breaks down on a bend because two
+    points at very different positions along the wall can share a similar X
+    or Y once the wall starts curving back.
+
+    Approach: find the centre of this group of points, measure each point's
+    angle around that centre, then walk around in angle order. In screen
+    coordinates (Y increases downward), increasing atan2(dy, dx) already
+    matches a visually clockwise sweep, so no axis flip is needed.
+
+    Because a single wall is only ever a partial arc (not a full loop), the
+    points won't span all 360°. We find the single largest gap between
+    consecutive angles and treat that as the seam where the wall "ends" —
+    ordering starts right after that gap. This avoids the wrap-around bug
+    where a wall crossing the 0°/360° line would otherwise sort incorrectly.
   */
-  function principalAxisSort(pointsList) {
+  function sortPointsByAngle(pointsList, clockwise) {
     if (pointsList.length <= 1) return pointsList.slice();
+
     const cx = pointsList.reduce((sum, p) => sum + p.x, 0) / pointsList.length;
     const cy = pointsList.reduce((sum, p) => sum + p.y, 0) / pointsList.length;
-    let xx = 0, yy = 0, xy = 0;
-    pointsList.forEach(point => {
-      const dx = point.x - cx;
-      const dy = point.y - cy;
-      xx += dx * dx;
-      yy += dy * dy;
-      xy += dx * dy;
-    });
-    const theta = 0.5 * Math.atan2(2 * xy, xx - yy);
-    const ux = Math.cos(theta);
-    const uy = Math.sin(theta);
-    return pointsList.slice().sort((a, b) =>
-      ((a.x - cx) * ux + (a.y - cy) * uy) -
-      ((b.x - cx) * ux + (b.y - cy) * uy)
-    );
-  }
 
-  // After the principal-axis sort, orient the run so it reads in the
-  // expected compass direction (e.g. clockwise on the North side means
-  // left→right) rather than possibly starting from either end.
-  function orientCompassSide(sorted, side, direction) {
-    if (sorted.length <= 1) return sorted;
-    const clockwise = direction !== "counterclockwise";
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    let correct;
-    if (side === "N") correct = clockwise ? first.x <= last.x : first.x >= last.x;
-    else if (side === "E") correct = clockwise ? first.y <= last.y : first.y >= last.y;
-    else if (side === "S") correct = clockwise ? first.x >= last.x : first.x <= last.x;
-    else correct = clockwise ? first.y >= last.y : first.y <= last.y;
-    return correct ? sorted : sorted.slice().reverse();
+    const withAngles = pointsList.map(point => {
+      let angle = Math.atan2(point.y - cy, point.x - cx);
+      if (angle < 0) angle += 2 * Math.PI;
+      return { point, angle };
+    });
+
+    withAngles.sort((a, b) => a.angle - b.angle);
+
+    // Find the largest gap between consecutive angles (wrapping past the
+    // last point back to the first, +2π) — that gap is the seam.
+    let maxGap = -1;
+    let seamIndex = 0;
+    for (let i = 0; i < withAngles.length; i += 1) {
+      const current = withAngles[i].angle;
+      const isLast = i === withAngles.length - 1;
+      const next = withAngles[isLast ? 0 : i + 1].angle + (isLast ? 2 * Math.PI : 0);
+      const gap = next - current;
+      if (gap > maxGap) {
+        maxGap = gap;
+        seamIndex = isLast ? 0 : i + 1;
+      }
+    }
+
+    const rotated = withAngles.slice(seamIndex).concat(withAngles.slice(0, seamIndex));
+    const ordered = clockwise ? rotated : rotated.slice().reverse();
+    return ordered.map(item => item.point);
   }
 
   function autoSortSide(dataId, side, direction = "clockwise") {
     const dataType = getDataType(dataId);
     if (!dataType) return;
-    const sorted = orientCompassSide(principalAxisSort(pointsInSide(dataId, side)), side, direction);
+    const sorted = sortPointsByAngle(pointsInSide(dataId, side), direction !== "counterclockwise");
     if (!Array.isArray(dataType.lockedSides)) dataType.lockedSides = [];
     sorted.forEach((point, index) => { point.manualSeq = index + 1; });
     if (!dataType.lockedSides.includes(side)) dataType.lockedSides.push(side);
@@ -2208,21 +2214,39 @@ const Workspace = (() => {
   }
 
   function collectGroupWarnings(groups) {
-    const warnings = [];
-    const all = groups.flatMap(group => group.points);
-    // Nearly overlapping points, regardless of group.
-    for (let i = 0; i < all.length; i += 1) {
-      for (let j = i + 1; j < all.length; j += 1) {
-        const distance = Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y);
-        if (distance < 10) {
-          warnings.push(tagWarningDataType({ level: "high", uid: all[i].uid, text: `${pointDisplayName(all[i])} is almost overlapping another point.` }, all[i]));
-          break;
+    const byUid = new Map();
+    const severityRank = { high: 3, check: 2, info: 1 };
+
+    // Keep at most one warning per point — the most severe one — instead
+    // of letting overlap/far/gap checks all fire for the same point.
+    const addWarning = warning => {
+      const existing = byUid.get(warning.uid);
+      if (!existing || severityRank[warning.level] > severityRank[existing.level]) {
+        byUid.set(warning.uid, warning);
+      }
+    };
+
+    // Nearly overlapping points, checked within each side individually.
+    // Adjacent sides meet at a shared corner, where the last point of one
+    // side and the first point of the next are *expected* to sit close
+    // together — that is not an error, so corners must not be compared
+    // across groups here.
+    groups.forEach(group => {
+      const groupPoints = group.points;
+      for (let i = 0; i < groupPoints.length; i += 1) {
+        for (let j = i + 1; j < groupPoints.length; j += 1) {
+          const distance = Math.hypot(groupPoints[i].x - groupPoints[j].x, groupPoints[i].y - groupPoints[j].y);
+          if (distance < 10) {
+            addWarning(tagWarningDataType({ level: "high", uid: groupPoints[i].uid, text: `${pointDisplayName(groupPoints[i])} is almost overlapping another point in ${group.label}.` }, groupPoints[i]));
+            break;
+          }
         }
       }
-    }
+    });
+
     groups.forEach(group => {
       if (group.points.length === 1) {
-        warnings.push(tagWarningDataType({ level: "info", uid: group.points[0].uid, text: `${group.label} contains only one point.` }, group.points[0]));
+        addWarning(tagWarningDataType({ level: "info", uid: group.points[0].uid, text: `${group.label} contains only one point.` }, group.points[0]));
         return;
       }
       const cx = group.points.reduce((sum, p) => sum + p.x, 0) / group.points.length;
@@ -2232,23 +2256,24 @@ const Workspace = (() => {
       if (med > 0) {
         group.points.forEach((point, index) => {
           if (distances[index] > Math.max(30, med * 2.6)) {
-            warnings.push(tagWarningDataType({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is far from the other points in ${group.label}. Check its Side manually.` }, point));
+            addWarning(tagWarningDataType({ level: "check", uid: point.uid, text: `${pointDisplayName(point)} is far from the other points in ${group.label}. Check its Side manually.` }, point));
           }
         });
       }
-      const ordered = principalAxisSort(group.points);
+      const ordered = sortPointsByAngle(group.points, true);
       const gaps = [];
       for (let i = 1; i < ordered.length; i += 1) gaps.push(Math.hypot(ordered[i].x - ordered[i-1].x, ordered[i].y - ordered[i-1].y));
       const typicalGap = median(gaps);
       if (typicalGap > 0) {
         gaps.forEach((gap, index) => {
           if (gap > typicalGap * 3.5 && gap > 40) {
-            warnings.push(tagWarningDataType({ level: "check", uid: ordered[index + 1].uid, text: `${group.label} has an unusually large gap. Check whether a point belongs to another Side.` }, ordered[index + 1]));
+            addWarning(tagWarningDataType({ level: "check", uid: ordered[index + 1].uid, text: `${group.label} has an unusually large gap. Check whether a point belongs to another Side.` }, ordered[index + 1]));
           }
         });
       }
     });
-    return warnings.slice(0, 30);
+
+    return Array.from(byUid.values()).slice(0, 30);
   }
 
   function buildCompassSortReview(targetDataTypes, targets, before, after, direction) {

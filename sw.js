@@ -18,7 +18,7 @@
   cached copies are cleared and every device picks up the new version.
 */
 
-const CACHE_VERSION = "field-measurement-combined-v1-v2-19-autosort-review";
+const CACHE_VERSION = "field-measurement-combined-v1-v2-21-warning-fix";
 const CACHE_NAME = CACHE_VERSION;
 
 // Same-origin app shell, relative to the service worker location.
