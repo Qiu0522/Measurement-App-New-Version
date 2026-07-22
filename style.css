@@ -2348,6 +2348,12 @@ button {
 .sortReviewToggle { min-height: 30px; padding: 5px 9px; border: 1px solid #d6dce6; border-radius: 999px; color: #687386; background: #fff; font-size: 10px; font-weight: 800; }
 .sortReviewToggle.active { color: #285ec4; border-color: #bcd0f6; background: #edf4ff; }
 .sortReviewList { display: grid; gap: 8px; max-height: 230px; overflow: auto; padding: 1px 2px 3px; margin-bottom: 3px; scrollbar-width: thin; }
+.sortReviewDataTypeGroup { display: grid; gap: 7px; padding: 8px; border: 1px solid #e2e7ef; border-radius: 15px; background: rgba(247,249,252,.82); }
+.sortReviewDataTypeHeader { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 1px 3px 2px; }
+.sortReviewDataTypeDot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(148,163,184,.16); }
+.sortReviewDataTypeHeader strong { overflow: hidden; color: #273244; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sortReviewDataTypeHeader small { color: #7b8494; font-size: 10px; font-weight: 800; }
+.sortReviewDataTypeRows { display: grid; gap: 7px; }
 .sortReviewRow, .sortWarningRow { width: 100%; min-height: 62px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid #e0e5ed; border-radius: 14px; color: #273244; text-align: left; background: rgba(255,255,255,.9); box-shadow: 0 1px 2px rgba(15,23,42,.03); transition: border-color .15s, box-shadow .15s, transform .15s, background .15s; }
 .sortReviewRow:hover, .sortWarningRow:not(:disabled):hover { transform: translateY(-1px); border-color: #b8c9e8; box-shadow: 0 8px 20px rgba(37, 65, 110, .09); }
 .sortReviewRow.selectedReviewRow, .sortWarningRow.selectedReviewRow { border-color: #4f7ed8; background: #f2f6ff; box-shadow: 0 0 0 3px rgba(79,126,216,.13); }

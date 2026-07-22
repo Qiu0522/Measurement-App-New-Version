@@ -3370,15 +3370,21 @@ const Workspace = (() => {
       if (!visibleNumberChanged) return;
 
       const point = points.find(p => p.uid === uid);
-      if (point) changes.push({
-        uid,
-        point,
-        side: afterSide,
-        beforeSide,
-        afterSide,
-        beforeSeq,
-        afterSeq
-      });
+      if (point) {
+        const dataType = getDataType(point.dataId);
+        changes.push({
+          uid,
+          point,
+          dataId: point.dataId,
+          dataTypeName: dataType ? dataType.name : "Data",
+          dataTypeColor: dataType ? dataType.color : "#667085",
+          side: afterSide,
+          beforeSide,
+          afterSide,
+          beforeSeq,
+          afterSeq
+        });
+      }
     });
     return changes;
   }
@@ -3563,17 +3569,56 @@ const Workspace = (() => {
       <p class="sortReviewSafety"><span>✓</span><span><strong>Assignments protected.</strong> Auto Sort did not change any Side or Segment.</span></p>`;
 
     els.autoSortReviewChanges.innerHTML = review.changes.length ? "" : '<div class="sortReviewEmpty success"><span>✓</span><strong>No point numbers would change.</strong></div>';
-    review.changes.forEach((change, index) => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "sortReviewRow";
-      row.dataset.reviewUid = change.uid;
-      const beforeCode = formatReviewCode(change.beforeSide || change.side, change.beforeSeq);
-      const afterCode = formatReviewCode(change.afterSide || change.side, change.afterSeq);
-      row.innerHTML = `<span class="sortReviewRowIndex">${index + 1}</span><span class="sortReviewRowBody"><strong>${beforeCode} <i>→</i> ${afterCode}</strong><small>Click to locate this point</small></span><span class="sortReviewLocate">Locate</span>`;
-      row.addEventListener("click", () => focusReviewPoint(change.uid, row));
-      els.autoSortReviewChanges.appendChild(row);
-    });
+    if (review.changes.length) {
+      const groupedChanges = new Map();
+      review.changes.forEach(change => {
+        const key = change.dataId || "unknown";
+        if (!groupedChanges.has(key)) groupedChanges.set(key, []);
+        groupedChanges.get(key).push(change);
+      });
+
+      const orderedGroupKeys = [
+        ...dataTypes.map(dataType => dataType.id).filter(id => groupedChanges.has(id)),
+        ...Array.from(groupedChanges.keys()).filter(id => !dataTypes.some(dataType => dataType.id === id))
+      ];
+
+      let globalIndex = 0;
+      orderedGroupKeys.forEach(dataId => {
+        const groupChanges = groupedChanges.get(dataId);
+        const dataType = getDataType(dataId);
+        const group = document.createElement("section");
+        group.className = "sortReviewDataTypeGroup";
+
+        const header = document.createElement("div");
+        header.className = "sortReviewDataTypeHeader";
+        const dot = document.createElement("span");
+        dot.className = "sortReviewDataTypeDot";
+        dot.style.backgroundColor = dataType ? dataType.color : (groupChanges[0].dataTypeColor || "#667085");
+        const name = document.createElement("strong");
+        name.textContent = dataType ? dataType.name : (groupChanges[0].dataTypeName || "Data");
+        const count = document.createElement("small");
+        count.textContent = `${groupChanges.length} change${groupChanges.length === 1 ? "" : "s"}`;
+        header.append(dot, name, count);
+        group.appendChild(header);
+
+        const rows = document.createElement("div");
+        rows.className = "sortReviewDataTypeRows";
+        groupChanges.forEach(change => {
+          globalIndex += 1;
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "sortReviewRow";
+          row.dataset.reviewUid = change.uid;
+          const beforeCode = formatReviewCode(change.beforeSide || change.side, change.beforeSeq);
+          const afterCode = formatReviewCode(change.afterSide || change.side, change.afterSeq);
+          row.innerHTML = `<span class="sortReviewRowIndex">${globalIndex}</span><span class="sortReviewRowBody"><strong>${beforeCode} <i>→</i> ${afterCode}</strong><small>Click to locate this point</small></span><span class="sortReviewLocate">Locate</span>`;
+          row.addEventListener("click", () => focusReviewPoint(change.uid, row));
+          rows.appendChild(row);
+        });
+        group.appendChild(rows);
+        els.autoSortReviewChanges.appendChild(group);
+      });
+    }
 
     els.autoSortReviewWarnings.innerHTML = review.warnings.length ? "" : '<div class="sortReviewEmpty success"><span>✓</span><strong>No geometric warnings detected.</strong></div>';
     review.warnings.forEach(warning => {
