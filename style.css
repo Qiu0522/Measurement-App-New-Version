@@ -2420,8 +2420,8 @@ button {
 .point.sort-review-active { z-index: 180 !important; }
 .sort-review-flash { animation: sortReviewFlashV19 .3s ease-in-out 3 alternate; }
 @keyframes sortReviewFlashV19 {
-  from { filter: brightness(1); transform: scale(1); }
-  to { filter: brightness(1.2) drop-shadow(0 0 7px rgba(124,58,237,.8)); transform: scale(1.12); }
+  from { filter: brightness(1); box-shadow: inherit; }
+  to { filter: brightness(1.24) drop-shadow(0 0 8px rgba(124,58,237,.9)); }
 }
 
 @media (max-width: 760px) {
