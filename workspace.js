@@ -5952,6 +5952,16 @@ const Workspace = (() => {
     return JSON.parse(JSON.stringify(value));
   }
 
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[char]));
+  }
+
   return {
     init,
     openProject,
