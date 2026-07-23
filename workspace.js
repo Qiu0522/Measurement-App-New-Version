@@ -2087,10 +2087,23 @@ const Workspace = (() => {
     points at very different positions along the wall can share a similar X
     or Y once the wall starts curving back.
 
-    Approach: find the centre of this group of points, measure each point's
-    angle around that centre, then walk around in angle order. In screen
-    coordinates (Y increases downward), increasing atan2(dy, dx) already
-    matches a visually clockwise sweep, so no axis flip is needed.
+    Approach: measure each point's angle around a reference centre, then
+    walk around in angle order. In screen coordinates (Y increases
+    downward), increasing atan2(dy, dx) already matches a visually
+    clockwise sweep, so no axis flip is needed.
+
+    The reference centre matters a lot: for a genuinely curved wall, that
+    wall's own centroid sits inside the curve and works fine. But for a
+    straight (or nearly straight) wall, its own centroid sits almost ON the
+    line — which makes the angle calculation numerically unstable, since
+    tiny natural jitter perpendicular to the wall (no real measurement is
+    ever perfectly collinear) can flip a point's angle past a close
+    neighbour's, producing a spurious swap. Passing in a centre that's well
+    off the line — e.g. the centroid of the whole room, not just this one
+    side — keeps every point's angle changing smoothly and monotonically
+    along the wall regardless of whether it's straight or curved, so jitter
+    can no longer flip the order. When no such centre is available (or it's
+    degenerate), this falls back to the group's own centroid.
 
     Because a single wall is only ever a partial arc (not a full loop), the
     points won't span all 360°. We find the single largest gap between
@@ -2098,11 +2111,17 @@ const Workspace = (() => {
     ordering starts right after that gap. This avoids the wrap-around bug
     where a wall crossing the 0°/360° line would otherwise sort incorrectly.
   */
-  function sortPointsByAngle(pointsList, clockwise) {
+  function sortPointsByAngle(pointsList, clockwise, referenceCenter = null) {
     if (pointsList.length <= 1) return pointsList.slice();
 
-    const cx = pointsList.reduce((sum, p) => sum + p.x, 0) / pointsList.length;
-    const cy = pointsList.reduce((sum, p) => sum + p.y, 0) / pointsList.length;
+    let cx, cy;
+    if (referenceCenter && Number.isFinite(referenceCenter.x) && Number.isFinite(referenceCenter.y)) {
+      cx = referenceCenter.x;
+      cy = referenceCenter.y;
+    } else {
+      cx = pointsList.reduce((sum, p) => sum + p.x, 0) / pointsList.length;
+      cy = pointsList.reduce((sum, p) => sum + p.y, 0) / pointsList.length;
+    }
 
     const withAngles = pointsList.map(point => {
       let angle = Math.atan2(point.y - cy, point.x - cx);
@@ -2132,10 +2151,25 @@ const Workspace = (() => {
     return ordered.map(item => item.point);
   }
 
+  // Centroid of every non-excluded point in this data type, across all
+  // sides — used as the stable angle-sort reference centre (see comment
+  // on sortPointsByAngle above). Falls back to null when there simply
+  // aren't enough points elsewhere to form a meaningful room-wide centre,
+  // in which case sortPointsByAngle falls back to the side's own centroid.
+  function roomCenterForDataType(dataId) {
+    const all = points.filter(p => p.dataId === dataId && !p.excluded);
+    if (all.length < 3) return null;
+    return {
+      x: all.reduce((sum, p) => sum + p.x, 0) / all.length,
+      y: all.reduce((sum, p) => sum + p.y, 0) / all.length
+    };
+  }
+
   function autoSortSide(dataId, side, direction = "clockwise") {
     const dataType = getDataType(dataId);
     if (!dataType) return;
-    const sorted = sortPointsByAngle(pointsInSide(dataId, side), direction !== "counterclockwise");
+    const center = roomCenterForDataType(dataId);
+    const sorted = sortPointsByAngle(pointsInSide(dataId, side), direction !== "counterclockwise", center);
     if (!Array.isArray(dataType.lockedSides)) dataType.lockedSides = [];
     sorted.forEach((point, index) => { point.manualSeq = index + 1; });
     if (!dataType.lockedSides.includes(side)) dataType.lockedSides.push(side);
@@ -2260,7 +2294,7 @@ const Workspace = (() => {
           }
         });
       }
-      const ordered = sortPointsByAngle(group.points, true);
+      const ordered = sortPointsByAngle(group.points, true, group.dataId ? roomCenterForDataType(group.dataId) : null);
       const gaps = [];
       for (let i = 1; i < ordered.length; i += 1) gaps.push(Math.hypot(ordered[i].x - ordered[i-1].x, ordered[i].y - ordered[i-1].y));
       const typicalGap = median(gaps);
@@ -2279,7 +2313,7 @@ const Workspace = (() => {
   function buildCompassSortReview(targetDataTypes, targets, before, after, direction) {
     const changes = [];
     targetDataTypes.forEach(dt => changes.push(...compareSnapshotChanges(before[dt.id], after[dt.id])));
-    const groups = targets.map(({ dt, side }) => ({ label: `${dt.name} · ${side}`, points: pointsInSide(dt.id, side) }));
+    const groups = targets.map(({ dt, side }) => ({ label: `${dt.name} · ${side}`, dataId: dt.id, points: pointsInSide(dt.id, side) }));
     const checked = groups.reduce((sum, group) => sum + group.points.length, 0);
     return { title: "Auto Sort Review", context: `${direction === "clockwise" ? "Clockwise" : "Counterclockwise"} · Side assignments unchanged`, checked, changes, warnings: collectGroupWarnings(groups) };
   }

@@ -1,3 +1,20 @@
+FIELD MEASUREMENT VERSION 6.9.3
+
+VERSION 6.9.3 — AUTO SORT: FIXED STRAIGHT-WALL INSTABILITY
+- Angle-based Auto Sort now measures each point's angle around the centre
+  of the whole room (all sides of that data type together), not just the
+  side being sorted. A straight wall's own centre sits almost exactly on
+  the wall itself, which made the angle calculation for that side alone
+  numerically unstable — tiny, normal measurement jitter perpendicular to
+  the wall could flip two neighbouring points' relative angle and produce
+  a wrong swap (e.g. a straight West wall recommending points 2 and 3 be
+  swapped when they were already correct). Sides with real curvature
+  (already fixed in 6.9.1) are unaffected by this change.
+- Verified with unit tests (multiple jitter patterns on a straight wall,
+  100% correct after the fix vs. failing on every pattern before it) and
+  in a full running-app test with a real 4-sided room.
+- sw.js CACHE_VERSION bumped to v1-v2-22-sort-stability.
+
 FIELD MEASUREMENT VERSION 6.9.2
 
 VERSION 6.9.2 — AUTO SORT REVIEW: FIXED REPETITIVE WARNINGS
