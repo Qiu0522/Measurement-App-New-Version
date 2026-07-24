@@ -1278,7 +1278,7 @@ const App = (() => {
     if (typeof BroadcastChannel === "undefined") return;
 
     try {
-      const channel = new BroadcastChannel("field-measurement-tabs");
+      const channel = new BroadcastChannel("field-measurement-tabs-new");
       const myId = Math.random().toString(16).slice(2);
 
       channel.onmessage = event => {

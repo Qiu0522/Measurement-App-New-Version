@@ -1,3 +1,26 @@
+FIELD MEASUREMENT VERSION 6.10.6-NEW-2
+
+VERSION 6.10.6-NEW-2 — FIXED CROSS-TALK WITH THE PRODUCTION APP'S "OPEN IN
+ANOTHER TAB" WARNING
+- The database/cache/localStorage isolation from the previous build
+  wasn't quite complete: the "This app is open in more than one tab or
+  window" detection uses its own BroadcastChannel, named
+  "field-measurement-tabs" — a hardcoded name, not tied to the database
+  name, and BroadcastChannel is scoped by name across the WHOLE origin,
+  not per-app. So if this build and the production app were ever open at
+  the same time on the same domain, they'd detect each other through
+  this channel and both show the "multiple tabs" warning, even though
+  their data was already completely separate.
+- This build's channel is now named "field-measurement-tabs-new" instead,
+  so it no longer cross-talks with the production app's tab detection at
+  all. Detecting two real tabs of THIS SAME build still works correctly
+  — that safety feature is unchanged, just no longer confused with the
+  other app.
+- Verified: a message on the old channel name no longer triggers the
+  banner in this build, while opening two real tabs of this build still
+  correctly warns as before.
+- sw.js CACHE_VERSION bumped to v1-v2-31-tab-detection-fix.
+
 FIELD MEASUREMENT VERSION 6.10.6-NEW
 
 VERSION 6.10.6-NEW — SEPARATE APP: ISOLATED FROM THE PRODUCTION DATABASE

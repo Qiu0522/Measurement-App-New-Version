@@ -18,7 +18,7 @@
   cached copies are cleared and every device picks up the new version.
 */
 
-const CACHE_VERSION = "field-measurement-NEW-v1-v2-30-decimal-column";
+const CACHE_VERSION = "field-measurement-NEW-v1-v2-31-tab-detection-fix";
 const CACHE_NAME = CACHE_VERSION;
 
 // Same-origin app shell, relative to the service worker location.
