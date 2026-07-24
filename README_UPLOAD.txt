@@ -1,3 +1,20 @@
+FIELD MEASUREMENT VERSION 6.10.3
+
+VERSION 6.10.3 — FIXED AUTO SORT REVIEW PANEL STAYING OPEN AFTER LEAVING
+- The Auto Sort Review panel is a fixed-position overlay. If it was left
+  open (without pressing Cancel or Apply) and you then switched to
+  Measure mode, or tapped Library to leave the project, the panel stayed
+  visible on top of whatever came next instead of closing with it —
+  "the tab follows you" after leaving.
+- Leaving Review mode for Measure mode, and closing/leaving a project
+  (e.g. returning to Library), now automatically cancels any pending
+  Auto Sort Review first — the panel closes, its temporary scroll-room
+  reservation from 6.10.2 is released, and nothing is left showing after
+  you've moved on. No data changes either way: a pending review was never
+  applied to your points in the first place, so cancelling it here loses
+  nothing.
+- sw.js CACHE_VERSION bumped to v1-v2-27-review-exit-fix.
+
 FIELD MEASUREMENT VERSION 6.10.2
 
 VERSION 6.10.2 — AUTO SORT REVIEW: FIXED "CAN'T SCROLL FAR ENOUGH RIGHT"

@@ -865,6 +865,12 @@ const Workspace = (() => {
   async function closeProject(saveBeforeClosing = true) {
     if (!project) return;
 
+    // The Auto Sort Review panel is a fixed-position overlay. If it's left
+    // open when the project closes (e.g. tapping Library without pressing
+    // Cancel/Apply first), it would otherwise stay rendered on top of
+    // whatever screen comes next instead of closing with the project.
+    if (pendingAutoSortReview) cancelPendingAutoSortReview();
+
     if (saveBeforeClosing && SaveController.isDirty()) {
       await SaveController.save("close", true);
     }
@@ -3253,6 +3259,10 @@ const Workspace = (() => {
 
   function setWorkspaceMode(mode) {
     workspaceMode = mode === "review" ? "review" : "measure";
+
+    if (workspaceMode !== "review" && pendingAutoSortReview) {
+      cancelPendingAutoSortReview();
+    }
 
     if (els.drawingToolsRow) {
       els.drawingToolsRow.classList.toggle("mode-review", workspaceMode === "review");
