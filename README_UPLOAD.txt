@@ -1,3 +1,57 @@
+FIELD MEASUREMENT VERSION 6.10.6
+
+VERSION 6.10.6 — CSV EXPORT: ADDED A CALCULATION-READY DECIMAL COLUMN
+- The text-protected Measurement column from 6.10.5 fixed fractions
+  turning into dates, but as text it can't be summed or averaged
+  directly in Excel.
+- CSV export now also includes a "[Data Type] Measurement (Decimal)"
+  column with the same measurement converted to a plain number (e.g.
+  "26 3/8" -> 26.375, "-1/2" -> -0.5). This is a genuine number with no
+  "/" in it at all, so there's no date-misread risk and nothing special
+  needed to protect it -- it's ready to sum, average, or otherwise
+  calculate with immediately. Selecting that column in Excel and applying
+  Format Cells > Fraction will display it the same way it's entered in
+  the app (e.g. "26 3/8") while it stays numeric underneath.
+  "X" (missing) measurements are left blank in this column, same as
+  before.
+- The original Measurement column (readable text, protected from being
+  misread as a date) is unchanged and still included alongside it.
+- sw.js CACHE_VERSION bumped to v1-v2-30-decimal-column.
+
+FIELD MEASUREMENT VERSION 6.10.5
+
+VERSION 6.10.5 — CSV EXPORT: FRACTIONS NO LONGER TURN INTO DATES IN EXCEL
+- Any measurement containing a fraction (e.g. "26 3/8", "-1/2") was being
+  auto-detected by Excel as a date when the CSV was opened, silently
+  replacing it with a date serial number. Reformatting that cell as a
+  fraction afterward didn't recover the original measurement — it just
+  displayed the date's serial number as a fraction, which is the "becomes
+  a large number" symptom, because by that point the real text is
+  already gone.
+- The Measurement column in CSV exports now writes any value containing
+  "/" as a text-literal formula (e.g. ="26 3/8"), which tells Excel to
+  treat it as plain text and display it exactly as typed, with no date
+  or number reinterpretation. Plain numeric measurements (no fraction)
+  are unaffected and stay as normal values.
+- Verified against the app's actual fraction keypad output ("26 3/8",
+  "36", "-1/2") by inspecting the real exported CSV bytes.
+- sw.js CACHE_VERSION bumped to v1-v2-29-csv-fraction-fix.
+
+FIELD MEASUREMENT VERSION 6.10.4
+
+VERSION 6.10.4 — AUTO SORT: VISIBLE MESSAGE WHEN THERE'S NO DATA TO SORT
+- Clicking "Sort" with a data type/side combination that has no assigned
+  points previously appeared to do nothing: the Auto Sort modal stayed
+  open (correctly), but the feedback ("No matching assigned points to
+  sort.") only went to the status bar, which sits underneath the modal
+  and was never visible while it was open.
+- The Auto Sort modal now shows a clear inline message ("No data: there
+  are no assigned points for [Data Type] on [Side].") right above the
+  Sort/Cancel buttons whenever there's nothing to sort, so it's actually
+  seen. The message clears automatically as soon as you change the Data
+  Type or Side dropdown.
+- sw.js CACHE_VERSION bumped to v1-v2-28-no-data-message.
+
 FIELD MEASUREMENT VERSION 6.10.3
 
 VERSION 6.10.3 — FIXED AUTO SORT REVIEW PANEL STAYING OPEN AFTER LEAVING

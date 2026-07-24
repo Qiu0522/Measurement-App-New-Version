@@ -186,6 +186,7 @@ const Workspace = (() => {
     els.autoSortSide = document.getElementById("autoSortSide");
     els.autoSortDirectionChoices = Array.from(document.querySelectorAll('input[name="autoSortDirection"]'));
     els.autoSortMethodChoices = Array.from(document.querySelectorAll('input[name="autoSortMethod"]'));
+    els.autoSortNoDataMessage = document.getElementById("autoSortNoDataMessage");
     els.confirmAutoSortBtn = document.getElementById("confirmAutoSortBtn");
     els.cancelAutoSortBtn = document.getElementById("cancelAutoSortBtn");
     els.sideChoices = Array.from(document.querySelectorAll(".sideBtn"));
@@ -590,6 +591,8 @@ const Workspace = (() => {
     els.autoSortModal.addEventListener("click", event => {
       if (event.target === els.autoSortModal) closeAutoSortModal();
     });
+    els.autoSortDataType.addEventListener("change", hideAutoSortNoDataMessage);
+    els.autoSortSide.addEventListener("change", hideAutoSortNoDataMessage);
 
     // Auto Sort Review dialog.
     if (els.applyAutoSortReviewBtn) els.applyAutoSortReviewBtn.addEventListener("click", applyPendingAutoSortReview);
@@ -3134,7 +3137,20 @@ const Workspace = (() => {
       choice.checked = choice.value === lastAutoSortMethod;
     });
 
+    hideAutoSortNoDataMessage();
+
     els.autoSortModal.classList.remove("hidden");
+  }
+
+  function showAutoSortNoDataMessage(text) {
+    if (!els.autoSortNoDataMessage) return;
+    els.autoSortNoDataMessage.textContent = text;
+    els.autoSortNoDataMessage.classList.remove("hidden");
+  }
+
+  function hideAutoSortNoDataMessage() {
+    if (!els.autoSortNoDataMessage) return;
+    els.autoSortNoDataMessage.classList.add("hidden");
   }
 
   function closeAutoSortModal() {
@@ -3155,10 +3171,21 @@ const Workspace = (() => {
     const method = selectedMethod ? selectedMethod.value : "position";
     const targetDataTypes = dataSelection === "__all__" ? dataTypes.slice() : [getDataType(dataSelection)].filter(Boolean);
     const targetSides = sideSelection === "__all__" ? ["N", "E", "S", "W"] : [sideSelection];
-    if (!targetDataTypes.length) { setStatus("Choose a valid data type."); return; }
+    if (!targetDataTypes.length) {
+      showAutoSortNoDataMessage("Choose a valid data type.");
+      setStatus("Choose a valid data type.");
+      return;
+    }
     const targets = [];
     targetDataTypes.forEach(dt => targetSides.forEach(side => { if (pointsInSide(dt.id, side).length) targets.push({ dt, side }); }));
-    if (!targets.length) { setStatus("No matching assigned points to sort."); return; }
+    if (!targets.length) {
+      const typeLabel = dataSelection === "__all__" ? "any data type" : (targetDataTypes[0] ? targetDataTypes[0].name : "this data type");
+      const sideLabel = sideSelection === "__all__" ? "any side" : sideSelection;
+      showAutoSortNoDataMessage(`No data: there are no assigned points for ${typeLabel} on ${sideLabel}.`);
+      setStatus("No matching assigned points to sort.");
+      return;
+    }
+    hideAutoSortNoDataMessage();
 
     closeAutoSortModal();
     lastAutoSortDataId = dataSelection;
@@ -4342,6 +4369,7 @@ const Workspace = (() => {
         headers.push(dataType.name + " Side");
         headers.push(dataType.name + " Seq");
         headers.push(dataType.name + " Measurement");
+        headers.push(dataType.name + " Measurement (Decimal)");
         headers.push(dataType.name + " Warning");
       });
 
@@ -4354,15 +4382,17 @@ const Workspace = (() => {
           const item = grouped[dataType.id][rowIndex];
 
           if (!item) {
-            row.push("", "", "", "");
+            row.push(cleanCSV(""), cleanCSV(""), cleanCSV(""), cleanCSV(""), cleanCSV(""));
             return;
           }
 
           const point = item.point;
 
-          row.push(item.side || "Unassigned");
-          row.push(item.seq);
-          row.push(point.measurement);
+          row.push(cleanCSV(item.side || "Unassigned"));
+          row.push(cleanCSV(item.seq));
+          row.push(cleanCSVMeasurement(point.measurement));
+          const decimal = measurementToDecimal(point.measurement);
+          row.push(cleanCSV(decimal === null ? "" : decimal));
 
           const notes = [];
           if (point.moveDistance > 80) {
@@ -4370,10 +4400,10 @@ const Workspace = (() => {
           } else if (point.moved) {
             notes.push("Point moved");
           }
-          row.push(notes.join("; "));
+          row.push(cleanCSV(notes.join("; ")));
         });
 
-        csv += row.map(cleanCSV).join(",") + "\n";
+        csv += row.join(",") + "\n";
       }
 
       downloadBlob(
@@ -5132,6 +5162,74 @@ const Workspace = (() => {
     return '"' +
       String(value ?? "").replace(/"/g, '""') +
       '"';
+  }
+
+  /*
+    Excel's CSV import auto-detects a cell that looks like "1/2" or
+    "24-1/2" as a date (e.g. "24-1/2" gets read as a day/month), silently
+    replacing the measurement text with a date serial number. Reformatting
+    that cell as a fraction afterward doesn't recover the original text —
+    it just displays the date's serial number as a fraction, which is a
+    large, meaningless number. This is exactly the "becomes a large
+    number" symptom.
+
+    The fix is to keep Excel from ever guessing at the type: writing the
+    cell as a text-literal formula (="24-1/2") tells Excel this is
+    explicitly text, so it displays exactly as typed with no date or
+    number reinterpretation. Only values containing "/" need this — plain
+    numeric measurements have no date-misread risk and are better left as
+    normal values (so summing them in a spreadsheet still works).
+  */
+  function cleanCSVMeasurement(value) {
+    const text = String(value ?? "");
+    if (text.includes("/")) {
+      return cleanCSV(`="${text.replace(/"/g, '""')}"`);
+    }
+    return cleanCSV(text);
+  }
+
+  /*
+    Converts a measurement in this app's whole+fraction format (matching
+    isValidMeasurement's grammar: "26", "26 3/8", "-12 1/2", "3/16", "X")
+    into a plain decimal number, e.g. "26 3/8" -> 26.375. Returns null for
+    "X" (missing) or anything empty/unparseable.
+
+    This gives Excel a genuinely numeric value with no "/" or dash
+    pattern at all, so there's no date-misread risk and no need for the
+    text-literal formula trick — it can be summed, averaged, or have
+    Excel's own Format Cells > Fraction applied to *display* it the same
+    way it's entered in the app, while staying calculable underneath.
+  */
+  function measurementToDecimal(value) {
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed || trimmed.toUpperCase() === "X") return null;
+
+    const negative = trimmed.startsWith("-");
+    const body = negative ? trimmed.slice(1) : trimmed;
+    const parts = body.split(/\s+/);
+
+    let whole = 0;
+    let fractionValue = 0;
+
+    if (parts.length === 2) {
+      whole = Number(parts[0]) || 0;
+      const [num, den] = parts[1].split("/").map(Number);
+      fractionValue = den ? num / den : 0;
+    } else if (parts[0] && parts[0].includes("/")) {
+      const [num, den] = parts[0].split("/").map(Number);
+      fractionValue = den ? num / den : 0;
+    } else {
+      whole = Number(parts[0]) || 0;
+    }
+
+    const total = whole + fractionValue;
+    if (!Number.isFinite(total)) return null;
+
+    // Round away tiny floating-point artifacts (e.g. 1/3-style fractions)
+    // while preserving exact values for the common power-of-two
+    // denominators (halves, quarters, eighths, sixteenths, etc.).
+    const rounded = Math.round(total * 1e6) / 1e6;
+    return negative ? -rounded : rounded;
   }
 
   function downloadBlob(blob, fileName) {
