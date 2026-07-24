@@ -1,3 +1,58 @@
+FIELD MEASUREMENT VERSION 6.10
+
+VERSION 6.10 — RESTORED SORT METHOD CHOICE + LESS NOISY WARNINGS
+- Auto Sort's "Sort Method" choice (Straight wall / Curved wall) is back.
+  Straight wall uses a plain coordinate sort with no centroid or angle math
+  at all, so normal measurement jitter can never destabilize it — the
+  reliable choice for any wall that's straight or close to it. Curved wall
+  keeps the angle-around-room-centre approach from 6.9.1–6.9.4 for walls
+  with real, visible curvature. This replaces the single automatic
+  "always angle-based" approach, which could still occasionally recommend
+  a wrong swap depending on room geometry (as bases 6.9.1-6.9.4 tried,
+  imperfectly, to detect on their own).
+- Reworked the Auto Sort Review geometric warnings, which were flagging
+  far more points than were actually wrong:
+  - The "far from the other points" check compared distance to the
+    group's centroid, which is a poor fit for wall-shaped data — a point
+    at the far end of a long straight wall is naturally far from the
+    centroid without anything being wrong. It's replaced with a check for
+    how far a point sits off the wall's own line/curve direction, which
+    is a much more specific signal of an actual mis-assignment.
+  - The "unusually large gap" check is removed entirely — it couldn't
+    reliably tell a real ordering problem apart from normal uneven
+    field-measurement spacing (dense points near a door/corner, sparse
+    across a plain stretch of wall), so it produced warnings for
+    completely normal layouts.
+  - The "almost overlapping" and per-point dedup logic from 6.9.2 are
+    unchanged.
+- Also added: individual point-level partial apply in the Auto Sort
+  Review — uncheck any single change to leave that point's number exactly
+  as it was, while everything else still resequences around it. A
+  rejected point acts as a fixed anchor; points on either side of it keep
+  the new proposed relative order among themselves but can't cross past
+  the anchor. A "select all" toggle and a live "Apply N of M" button
+  label make it clear what will actually be committed.
+- sw.js CACHE_VERSION bumped to v1-v2-24-method-choice.
+
+FIELD MEASUREMENT VERSION 6.9.4
+
+VERSION 6.9.4 — AUTO SORT: FIXED ROOM-CENTRE BIAS WITH UNEVEN POINT COUNTS
+- The 6.9.3 fix (measuring angles around the whole room's centre instead
+  of each side's own) had a gap: the room centre was a simple average of
+  every point, so a side with a lot more points than the others (e.g. a
+  wall with more doors/trim/fixtures measured) pulled the centre toward
+  itself, weakening or reintroducing the same instability for whichever
+  side had fewer points -- this is what was still causing a wrong swap
+  recommendation (e.g. West's points 2 and 3) even after 6.9.3.
+- The room centre is now the average of each side's OWN centroid, so
+  every side counts equally regardless of how many points it has.
+- Verified with unit tests reproducing this exact imbalance (many points
+  on one side, few on the others) -- the old averaging failed with local
+  swaps under this condition, the new per-side weighting did not -- and
+  confirmed again in the full running app with an intentionally
+  imbalanced room (sparse N/E/S, dense West).
+- sw.js CACHE_VERSION bumped to v1-v2-23-center-weighting.
+
 FIELD MEASUREMENT VERSION 6.9.3
 
 VERSION 6.9.3 — AUTO SORT: FIXED STRAIGHT-WALL INSTABILITY

@@ -2318,13 +2318,23 @@ button {
 .sortReviewDataTypeHeader strong { overflow: hidden; color: #273244; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .sortReviewDataTypeHeader small { color: #7b8494; font-size: 10px; font-weight: 800; }
 .sortReviewDataTypeRows { display: grid; gap: 7px; }
-.sortReviewRow, .sortWarningRow { width: 100%; min-height: 62px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid #e0e5ed; border-radius: 14px; color: #273244; text-align: left; background: rgba(255,255,255,.9); box-shadow: 0 1px 2px rgba(15,23,42,.03); transition: border-color .15s, box-shadow .15s, transform .15s, background .15s; }
+.sortReviewRow { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+.sortWarningRow { grid-template-columns: auto minmax(0, 1fr) auto; }
+.sortReviewRow, .sortWarningRow { width: 100%; min-height: 62px; display: grid; gap: 10px; align-items: center; padding: 10px; border: 1px solid #e0e5ed; border-radius: 14px; color: #273244; text-align: left; background: rgba(255,255,255,.9); box-shadow: 0 1px 2px rgba(15,23,42,.03); transition: border-color .15s, box-shadow .15s, transform .15s, background .15s; }
 .sortReviewRow:hover, .sortWarningRow:not(:disabled):hover { transform: translateY(-1px); border-color: #b8c9e8; box-shadow: 0 8px 20px rgba(37, 65, 110, .09); }
 .sortReviewRow.selectedReviewRow, .sortWarningRow.selectedReviewRow { border-color: #4f7ed8; background: #f2f6ff; box-shadow: 0 0 0 3px rgba(79,126,216,.13); }
+.sortReviewRow.rowRejected { opacity: .55; background: rgba(241,243,247,.8); }
+.sortReviewRow.rowRejected .sortReviewRowIndex { color: #8894a6; background: #eef0f4; }
+.sortReviewRowCheckboxWrap { display: grid; place-items: center; padding: 0 2px; cursor: pointer; }
+.sortReviewRowCheckbox { width: 20px; height: 20px; accent-color: #4f7ed8; cursor: pointer; }
 .sortReviewRowIndex, .sortWarningIcon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; color: #315eae; background: #edf3ff; font-size: 12px; font-weight: 900; }
-.sortReviewRowBody { min-width: 0; display: grid; gap: 3px; }
+.sortReviewRowBody { min-width: 0; display: grid; gap: 3px; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; color: inherit; cursor: pointer; }
 .sortReviewRowBody strong { overflow-wrap: anywhere; font-size: 12px; line-height: 1.35; }
 .sortReviewRowBody small { color: #7b8494; font-size: 10px; font-weight: 600; }
+.sortReviewSelectAllBar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 10px; margin-bottom: 8px; border: 1px dashed #d7dee8; border-radius: 12px; background: rgba(255,255,255,.6); }
+.sortReviewSelectAllLabel { display: inline-flex; align-items: center; gap: 8px; color: #273244; font-size: 12px; font-weight: 700; cursor: pointer; }
+.sortReviewSelectAllLabel input { width: 18px; height: 18px; accent-color: #4f7ed8; cursor: pointer; }
+.sortReviewSelectHint { color: #7b8494; font-size: 10px; font-weight: 600; }
 .sortReviewChangePill { display: inline-flex; align-items: center; gap: 5px; padding: 7px 8px; border-radius: 10px; color: #234b93; background: #eef4ff; white-space: nowrap; font-size: 11px; }
 .sortReviewChangePill i { color: #8493aa; font-style: normal; }
 .sortWarningRow.info .sortWarningIcon { color: #566174; background: #eef0f4; }
@@ -2386,6 +2396,13 @@ button {
   box-shadow: 0 0 0 2px #d23c35, 0 0 0 5px rgba(210,60,53,.2) !important;
 }
 
+/* A rejected change: shown as neutral/pinned rather than "changing". */
+.point.sort-review-rejected {
+  z-index: 110 !important;
+  box-shadow: 0 0 0 2px #94a3b8, 0 0 0 5px rgba(148,163,184,.14) !important;
+  border-radius: 5px !important;
+}
+
 /* Selected review item: no movement, only a short purple pulse. */
 .point.sort-review-active { z-index: 180 !important; }
 .sort-review-flash { animation: sortReviewFlashV19 .3s ease-in-out 3 alternate; }
@@ -2400,8 +2417,9 @@ button {
   .sortReviewStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sortReviewHeader { padding: 16px; }
   .sortReviewSection { padding-left: 14px; padding-right: 14px; }
-  .sortReviewRow, .sortWarningRow { grid-template-columns: auto minmax(0,1fr); }
-  .sortReviewChangePill, .sortReviewLocate { grid-column: 2; justify-self: start; }
+  .sortReviewRow { grid-template-columns: auto auto minmax(0,1fr); }
+  .sortWarningRow { grid-template-columns: auto minmax(0,1fr); }
+  .sortReviewChangePill, .sortReviewLocate { grid-column: -2 / -1; justify-self: start; }
   .stickyReviewActions { padding-left: 14px; padding-right: 14px; }
 }
 
