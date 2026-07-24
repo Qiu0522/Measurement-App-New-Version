@@ -1,3 +1,33 @@
+FIELD MEASUREMENT VERSION 6.10.6-NEW
+
+VERSION 6.10.6-NEW — SEPARATE APP: ISOLATED FROM THE PRODUCTION DATABASE
+- This build is now a fully separate app from the current production
+  version, so it's safe to run side-by-side without any risk to existing
+  data:
+  - IndexedDB database renamed from "FieldMeasurementV4" to
+    "FieldMeasurementV4_New" — a completely separate store; this build
+    will never read, write, or overwrite anything in the production
+    database, and vice versa.
+  - Cache Storage name changed to a "field-measurement-NEW-..." prefix,
+    separate from production's "field-measurement-combined-..." prefix.
+  - The "last backup" localStorage key is now "fm_new_lastBackupAt",
+    separate from production's "fm_lastBackupAt", in case both are ever
+    hosted on the same domain.
+  - App title, home-screen title, and the in-app header now read "Field
+    Measurement (New)" so it's visually unmistakable from the production
+    app if both are installed at once (e.g. as separate home-screen
+    icons on an iPad).
+  - manifest.json name/short_name updated to match ("Field Measurement
+    (New)" / "FM New").
+- Practical effect: this build starts with an empty library the first
+  time it's opened -- it does NOT see your existing production projects,
+  since it's reading from a different database entirely. That's
+  intentional. Use it to test freely; your production data and app are
+  completely untouched no matter what happens here.
+- Verified live: confirms only "FieldMeasurementV4_New" exists in
+  IndexedDB after creating a project, with zero references to the old
+  production database name anywhere in the code.
+
 FIELD MEASUREMENT VERSION 6.10.6
 
 VERSION 6.10.6 — CSV EXPORT: ADDED A CALCULATION-READY DECIMAL COLUMN

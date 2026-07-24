@@ -1053,7 +1053,7 @@ const App = (() => {
     if (!els.backupStatus) return;
 
     let raw = null;
-    try { raw = localStorage.getItem("fm_lastBackupAt"); } catch (_) {}
+    try { raw = localStorage.getItem("fm_new_lastBackupAt"); } catch (_) {}
 
     if (!raw) {
       els.backupStatus.textContent =
@@ -1122,7 +1122,7 @@ const App = (() => {
         `field-measurement-backup-${stamp}.json`
       );
 
-      try { localStorage.setItem("fm_lastBackupAt", String(Date.now())); } catch (_) {}
+      try { localStorage.setItem("fm_new_lastBackupAt", String(Date.now())); } catch (_) {}
       updateBackupStatus();
 
       alert(

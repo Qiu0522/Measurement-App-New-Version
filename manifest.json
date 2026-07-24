@@ -1,6 +1,6 @@
 {
-  "name": "Field Measurement",
-  "short_name": "Measurement",
+  "name": "Field Measurement (New)",
+  "short_name": "FM New",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
