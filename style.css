@@ -2253,7 +2253,7 @@ button {
 }
 .autoSortReviewCard {
   pointer-events: auto;
-  width: min(470px, calc(100vw - 24px));
+  width: min(400px, 42vw, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
   margin: 0;
   overflow: auto;

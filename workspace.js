@@ -2440,8 +2440,25 @@ const Workspace = (() => {
     // Both Number Changes and Warning rows move the viewport to the point.
     // The point label itself stays at its drawing coordinates and only
     // receives a visual flash after the viewport finishes moving.
+    //
+    // The review panel is docked over the right edge of the screen and can
+    // cover a large share of a tablet-width viewport. Centering on the
+    // FULL wrapper width ignores that overlap and can land the point right
+    // behind the panel. Instead, center within only the portion of the
+    // wrapper that's actually still visible to the left of the panel.
     const wrapper = els.drawingWrapper;
-    const targetLeft = Math.max(0, point.x * zoomLevel - wrapper.clientWidth / 2);
+    const wrapperRect = wrapper.getBoundingClientRect();
+    let visibleWidth = wrapper.clientWidth;
+    if (els.autoSortReviewModal && !els.autoSortReviewModal.classList.contains("hidden")) {
+      const card = els.autoSortReviewModal.querySelector(".autoSortReviewCard");
+      if (card) {
+        const cardRect = card.getBoundingClientRect();
+        const overlapWidth = Math.max(0, wrapperRect.right - Math.max(wrapperRect.left, cardRect.left));
+        visibleWidth = Math.max(200, wrapper.clientWidth - overlapWidth);
+      }
+    }
+
+    const targetLeft = Math.max(0, point.x * zoomLevel - visibleWidth / 2);
     const targetTop = Math.max(0, point.y * zoomLevel - wrapper.clientHeight / 2);
     if (typeof wrapper.scrollTo === "function") {
       wrapper.scrollTo({ left: targetLeft, top: targetTop, behavior: "smooth" });
@@ -2529,6 +2546,20 @@ const Workspace = (() => {
       const applying = totalChanges - rejected;
       els.applyAutoSortReviewBtn.textContent = `Apply Auto Sort (${applying} of ${totalChanges})`;
     }
+  }
+
+  // While the review panel covers the right edge of the screen, a point
+  // near the drawing's own right edge may need MORE rightward scroll than
+  // the canvas actually has room for, so it can never be pulled clear of
+  // the panel no matter what focusReviewPoint asks for — the browser
+  // simply clamps at the end of the content. Giving the scrollable sizer
+  // some temporary extra width (via margin, since box-sizing: border-box
+  // means padding wouldn't grow it) guarantees there's always enough room
+  // to fully center any point while the panel is open, and removing it
+  // afterward restores normal scroll bounds for editing.
+  function setReviewExtraScrollRoom(extraPx) {
+    if (!els.drawingSizer) return;
+    els.drawingSizer.style.marginRight = extraPx > 0 ? `${extraPx}px` : "";
   }
 
   function openAutoSortReview(review) {
@@ -2677,6 +2708,12 @@ const Workspace = (() => {
     els.autoSortReviewModal.classList.remove("hidden");
     document.body.classList.add("sortReviewOpen");
     applyAutoSortReviewMarkers(review);
+
+    // Measure the panel now that it's actually rendered, and reserve that
+    // much extra scroll room (plus a small margin) so any point can still
+    // be scrolled fully clear of it.
+    const card = els.autoSortReviewModal.querySelector(".autoSortReviewCard");
+    setReviewExtraScrollRoom(card ? Math.ceil(card.getBoundingClientRect().width) + 40 : 0);
   }
 
   function cancelPendingAutoSortReview() {
@@ -2686,6 +2723,7 @@ const Workspace = (() => {
     rejectedChangeUids = new Set();
     document.body.classList.remove("sortReviewOpen");
     if (els.autoSortReviewModal) els.autoSortReviewModal.classList.add("hidden");
+    setReviewExtraScrollRoom(0);
     setStatus("Auto Sort cancelled. No changes were applied.");
   }
 
@@ -2786,6 +2824,7 @@ const Workspace = (() => {
     rejectedChangeUids = new Set();
     document.body.classList.remove("sortReviewOpen");
     if (els.autoSortReviewModal) els.autoSortReviewModal.classList.add("hidden");
+    setReviewExtraScrollRoom(0);
     setStatus(rejectedCount > 0
       ? `Auto Sort applied — kept ${rejectedCount} point${rejectedCount === 1 ? "" : "s"} unchanged. Side assignments were not changed.`
       : "Auto Sort applied. Side assignments were not changed.");

@@ -1,3 +1,42 @@
+FIELD MEASUREMENT VERSION 6.10.2
+
+VERSION 6.10.2 — AUTO SORT REVIEW: FIXED "CAN'T SCROLL FAR ENOUGH RIGHT"
+- The 6.10.1 fix made Locate centre points within the visible area to the
+  left of the review panel, but for a point near the drawing/PDF page's
+  own right edge, that can call for MORE rightward scroll than the canvas
+  actually has — there's no more page to scroll into, so the point got
+  stuck as far right as the browser's scroll limit allowed, which could
+  still be under or right at the edge of the panel.
+- While the review panel is open, the drawing's scrollable area now
+  temporarily reserves extra room equal to the panel's width, so there's
+  always enough space to fully centre any point clear of the panel,
+  including ones right at the page's edge. This extra space is removed
+  again as soon as the panel closes, so normal editing/scrolling is
+  unaffected.
+- Verified with a point placed within 20-100 units of the canvas's right
+  edge: previously this would hit the scroll limit and stay hidden under
+  the panel; now it's pulled fully clear.
+- sw.js CACHE_VERSION bumped to v1-v2-26-edge-scroll-fix.
+
+FIELD MEASUREMENT VERSION 6.10.1
+
+VERSION 6.10.1 — AUTO SORT REVIEW: PANEL SIZE AND LOCATE FIXES
+- The Auto Sort Review panel was up to 470px wide with no viewport-relative
+  cap, which could cover over half a tablet-width screen (e.g. ~61% on a
+  768px-wide iPad in portrait) and hide points on the right side of the
+  drawing. It now scales with the viewport (roughly 40% max on tablet
+  widths, capped at 400px on desktop) so meaningfully more of the drawing
+  stays visible while the panel is open.
+- Clicking "Locate" on a change or warning centred the point using the
+  FULL drawing viewport width, without accounting for the review panel
+  sitting on top of the right portion of that same viewport — so the
+  point could get centred right behind the panel. It now centres within
+  only the portion of the drawing actually visible to the left of the
+  panel, so the point reliably ends up somewhere you can see it. Verified
+  at a tablet-width viewport: previously the panel covered ~61% of the
+  screen, now ~42%, and located points land clearly in the visible area.
+- sw.js CACHE_VERSION bumped to v1-v2-25-review-panel-fit.
+
 FIELD MEASUREMENT VERSION 6.10
 
 VERSION 6.10 — RESTORED SORT METHOD CHOICE + LESS NOISY WARNINGS
