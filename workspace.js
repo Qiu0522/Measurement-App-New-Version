@@ -865,6 +865,96 @@ const Workspace = (() => {
     setStatus("Project loaded. Press Save anytime; safety save runs every 3 minutes.");
   }
 
+  /*
+    Resets every transient interaction/UI-toggle state back to its
+    default. Full-screen modals can't leak between projects since their
+    backdrop blocks the Library button while they're open — but
+    lightweight things that DON'T block anything (the Export/Markup
+    dropdown menus, mid-gesture flags, batch-assign mode, an in-progress
+    drag, a leftover search term, etc.) can otherwise still be "open" or
+    "in progress" when the operator taps Library, and would then show up
+    stuck that way in whatever project is opened next.
+  */
+  function resetTransientUiState() {
+    pinchActive = false;
+    pinchStartDist = 0;
+    pinchStartZoom = 1;
+    latestPinchEvent = null;
+    pinchFrameRequested = false;
+
+    clickStartX = 0;
+    clickStartY = 0;
+    clickMoved = false;
+
+    contextPoint = null;
+    movingPoint = null;
+    tapReorderState = null;
+
+    batchAssignMode = false;
+    batchAssignPoints = new Set();
+    if (els.batchAssignBtn) els.batchAssignBtn.classList.remove("activeTool");
+
+    isDraggingPoint = false;
+    draggedPoint = null;
+    dragStartX = 0;
+    dragStartY = 0;
+
+    isDrawingComment = false;
+    lastCommentX = 0;
+    lastCommentY = 0;
+    lastCommentPressure = 0.5;
+    commentBeforeStroke = "";
+    commentFingerPan = null;
+    pendingTextPosition = null;
+    highlightPoints = [];
+
+    selectedNoteId = null;
+    editingNoteId = null;
+    noteDrag = null;
+
+    reviewFilter = "all";
+    reviewSearchTerm = "";
+    if (els.reviewSearchInput) els.reviewSearchInput.value = "";
+    currentSide = "";
+    setPositionPoint = null;
+    pendingExportTypes = null;
+    pendingExportKind = null;
+
+    measurementCallback = null;
+    measurementRawValue = "";
+    directionCallback = null;
+    fileNameCallback = null;
+
+    pointMode = "lock";
+    commentTool = "none";
+    showOrderLabels = false;
+    zoomLevel = 1;
+
+    undoStack = [];
+    redoStack = [];
+    if (els.undoBtn) els.undoBtn.disabled = true;
+    if (els.redoBtn) els.redoBtn.disabled = true;
+
+    // Close lightweight disclosure menus that don't block navigation —
+    // unlike full-screen modals, these can still be open when Library
+    // is tapped.
+    if (els.markupMenu) els.markupMenu.open = false;
+    const exportMenu = document.querySelector(".exportMenu");
+    if (exportMenu) exportMenu.open = false;
+
+    workspaceMode = "measure";
+    if (els.drawingToolsRow) {
+      els.drawingToolsRow.classList.remove("mode-review");
+      els.drawingToolsRow.classList.add("mode-measure");
+    }
+    if (els.measureModeBtn) els.measureModeBtn.classList.add("active");
+    if (els.reviewModeBtn) els.reviewModeBtn.classList.remove("active");
+
+    updateToolButtons();
+    updateLabelsButton();
+    updateBrushControls();
+  }
+
   async function closeProject(saveBeforeClosing = true) {
     if (!project) return;
 
@@ -883,6 +973,8 @@ const Workspace = (() => {
     currentPdfPage = 1; totalPdfPages = 1; pageStates = {};
     points = [];
     dataTypes = clone(DEFAULT_DATA_TYPES);
+    textNotes = [];
+    commentImageData = "";
     removeAllPointElements();
 
     const context = els.commentCanvas.getContext("2d");
@@ -892,6 +984,8 @@ const Workspace = (() => {
       els.commentCanvas.width,
       els.commentCanvas.height
     );
+
+    resetTransientUiState();
 
     SaveController.markSaved();
   }

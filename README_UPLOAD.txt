@@ -1,3 +1,27 @@
+FIELD MEASUREMENT VERSION 6.10.6-NEW-3
+
+VERSION 6.10.6-NEW-3 — FIXED UI STATE LEAKING BETWEEN PROJECTS
+- Full-screen modals can't leak between projects since their backdrop
+  blocks the Library button while they're open. But several lighter
+  things that DON'T block navigation were staying "on" after returning
+  to Library and opening a different project, including:
+  - The Export and Markup dropdown menus staying open.
+  - Review mode, batch-assign mode, and Show Order Labels staying on.
+  - A leftover search term in the Preview CSV sidebar.
+  - Various mid-gesture flags (pinch, drag, tap-to-reorder, drawing a
+    markup stroke) that should never survive past the interaction that
+    set them.
+  - Undo/Redo history and button states from the previous project.
+- closeProject() now resets all of this to its default state before the
+  Library screen shows, so every project starts clean regardless of
+  what was left open in whatever was open before it.
+- Verified live: opened the Export menu, switched to Review mode, turned
+  on batch-assign, and left text in the search box — then returned to
+  Library and opened a new project. All four were correctly back to
+  default, confirmed via undo/redo, mode buttons, and menu open-state
+  checks.
+- sw.js CACHE_VERSION bumped to v1-v2-32-state-reset-fix.
+
 FIELD MEASUREMENT VERSION 6.10.6-NEW-2
 
 VERSION 6.10.6-NEW-2 — FIXED CROSS-TALK WITH THE PRODUCTION APP'S "OPEN IN
