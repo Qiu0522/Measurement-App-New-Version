@@ -63,8 +63,14 @@ const Workspace = (() => {
   let noteDrag = null;
   let textNoteColor = "#ff0000";
   let reviewFilter = "all";
+  let reviewAreaFilter = "all";
   let reviewSearchTerm = "";
   let currentSide = "";
+  let areas = [];
+  let currentAreaId = "";
+  let pendingDeleteAreaId = null;
+  let areaModalFromManage = false;
+  let sideLabels = { N: "N", E: "E", S: "S", W: "W" };
   let setPositionPoint = null;
   let pendingExportTypes = null;
   let pendingExportKind = null;
@@ -268,6 +274,38 @@ const Workspace = (() => {
     els.reassignDataTypeTitle = document.getElementById("reassignDataTypeTitle");
     els.reassignDataTypeHint = document.getElementById("reassignDataTypeHint");
     els.reassignDataTypeList = document.getElementById("reassignDataTypeList");
+
+    els.areaPickerBtn = document.getElementById("areaPickerBtn");
+    els.areaPickerModal = document.getElementById("areaPickerModal");
+    els.areaPickerList = document.getElementById("areaPickerList");
+    els.areaPickerLabel = document.getElementById("areaPickerLabel");
+    els.manageAreasFromPickerBtn = document.getElementById("manageAreasFromPickerBtn");
+    els.cancelAreaPickerBtn = document.getElementById("cancelAreaPickerBtn");
+
+    els.areaModal = document.getElementById("areaModal");
+    els.areaNameInput = document.getElementById("areaNameInput");
+    els.cancelAreaBtn = document.getElementById("cancelAreaBtn");
+    els.confirmAreaBtn = document.getElementById("confirmAreaBtn");
+
+    els.manageAreasModal = document.getElementById("manageAreasModal");
+    els.manageAreasList = document.getElementById("manageAreasList");
+    els.closeManageAreasBtn = document.getElementById("closeManageAreasBtn");
+    els.addAreaFromManageBtn = document.getElementById("addAreaFromManageBtn");
+    els.renameSidesFromManageBtn = document.getElementById("renameSidesFromManageBtn");
+
+    els.renameSidesModal = document.getElementById("renameSidesModal");
+    els.renameSideNInput = document.getElementById("renameSideNInput");
+    els.renameSideEInput = document.getElementById("renameSideEInput");
+    els.renameSideSInput = document.getElementById("renameSideSInput");
+    els.renameSideWInput = document.getElementById("renameSideWInput");
+    els.resetRenameSidesBtn = document.getElementById("resetRenameSidesBtn");
+    els.cancelRenameSidesBtn = document.getElementById("cancelRenameSidesBtn");
+    els.confirmRenameSidesBtn = document.getElementById("confirmRenameSidesBtn");
+
+    els.autoSortAreaField = document.getElementById("autoSortAreaField");
+    els.autoSortArea = document.getElementById("autoSortArea");
+    els.reviewAreaFilterWrap = document.getElementById("reviewAreaFilterWrap");
+    els.reviewAreaFilter = document.getElementById("reviewAreaFilter");
     els.deleteDataTypePermanentlyBtn = document.getElementById("deleteDataTypePermanentlyBtn");
     els.cancelReassignDataTypeBtn = document.getElementById("cancelReassignDataTypeBtn");
 
@@ -389,6 +427,16 @@ const Workspace = (() => {
         setStatus(selected
           ? `Review mode: showing only ${selected.name}. This is a display filter only.`
           : "Review mode: showing all data types.");
+      });
+    }
+    if (els.reviewAreaFilter) {
+      els.reviewAreaFilter.addEventListener("change", () => {
+        reviewAreaFilter = els.reviewAreaFilter.value || "all";
+        refreshAllPoints();
+        const selected = reviewAreaFilter === "all" ? null : getArea(reviewAreaFilter);
+        setStatus(selected
+          ? `Review mode: showing only "${selected.name}". This is a display filter only.`
+          : "Review mode: showing all areas.");
       });
     }
     els.batchAssignBtn.addEventListener("click", startBatchAssign);
@@ -763,6 +811,51 @@ const Workspace = (() => {
       els.manageDataTypesModal.classList.remove("hidden");
     });
 
+    if (els.areaPickerBtn) {
+      els.areaPickerBtn.addEventListener("click", openAreaPicker);
+      els.cancelAreaPickerBtn.addEventListener("click", () => {
+        els.areaPickerModal.classList.add("hidden");
+      });
+      els.manageAreasFromPickerBtn.addEventListener("click", () => {
+        els.areaPickerModal.classList.add("hidden");
+        openManageAreasModal();
+      });
+
+      els.confirmAreaBtn.addEventListener("click", confirmArea);
+      els.cancelAreaBtn.addEventListener("click", () => {
+        els.areaModal.classList.add("hidden");
+        if (areaModalFromManage) {
+          areaModalFromManage = false;
+          renderManageAreasList();
+          els.manageAreasModal.classList.remove("hidden");
+        }
+      });
+
+      els.closeManageAreasBtn.addEventListener("click", () => {
+        els.manageAreasModal.classList.add("hidden");
+      });
+      els.addAreaFromManageBtn.addEventListener("click", () => {
+        areaModalFromManage = true;
+        els.manageAreasModal.classList.add("hidden");
+        els.areaNameInput.value = "";
+        els.areaModal.classList.remove("hidden");
+      });
+      if (els.renameSidesFromManageBtn) {
+        els.renameSidesFromManageBtn.addEventListener("click", () => {
+          els.manageAreasModal.classList.add("hidden");
+          openRenameSidesModal();
+        });
+      }
+    }
+
+    if (els.renameSidesModal) {
+      els.confirmRenameSidesBtn.addEventListener("click", confirmRenameSides);
+      els.resetRenameSidesBtn.addEventListener("click", resetRenameSides);
+      els.cancelRenameSidesBtn.addEventListener("click", () => {
+        els.renameSidesModal.classList.add("hidden");
+      });
+    }
+
 
     els.sideModal.querySelectorAll("[data-side]").forEach(button => {
       button.addEventListener("click", () => {
@@ -788,13 +881,17 @@ const Workspace = (() => {
       pageStates[1] = {
         points: clone(state.points || []), dataTypes: clone(state.dataTypes || DEFAULT_DATA_TYPES),
         textNotes: clone(state.textNotes || []), commentImageData: state.commentImageData || "",
-        selectedDataId: state.selectedDataId || null, scrollLeft: state.scrollLeft || 0, scrollTop: state.scrollTop || 0
+        selectedDataId: state.selectedDataId || null, scrollLeft: state.scrollLeft || 0, scrollTop: state.scrollTop || 0,
+        areas: clone(state.areas || []), currentAreaId: state.currentAreaId || ""
       };
     }
     const initialPageState = pageStates[currentPdfPage] || pageStates[1] || {};
     points = clone(initialPageState.points || []);
     dataTypes = clone(initialPageState.dataTypes || DEFAULT_DATA_TYPES);
     textNotes = clone(initialPageState.textNotes || []);
+    areas = clone(initialPageState.areas || []);
+    currentAreaId = initialPageState.currentAreaId || "";
+    sideLabels = Object.assign({ N: "N", E: "E", S: "S", W: "W" }, state.sideLabels || {});
 
     dataTypes.forEach(dataType => {
       if (typeof dataType.ordered !== "boolean") dataType.ordered = false;
@@ -819,6 +916,8 @@ const Workspace = (() => {
     renderDataSelect(state.selectedDataId);
     updateToolButtons();
     updateLabelsButton();
+    updateAreaSwatch();
+    refreshSideLabelDisplays();
 
     removeAllPointElements();
 
@@ -840,6 +939,7 @@ const Workspace = (() => {
     });
     setCurrentSide("");
     reviewFilter = "all";
+    reviewAreaFilter = "all";
     updateNoSideBanner();
     setWorkspaceMode("measure");
 
@@ -913,6 +1013,7 @@ const Workspace = (() => {
     noteDrag = null;
 
     reviewFilter = "all";
+    reviewAreaFilter = "all";
     reviewSearchTerm = "";
     if (els.reviewSearchInput) els.reviewSearchInput.value = "";
     currentSide = "";
@@ -975,6 +1076,11 @@ const Workspace = (() => {
     dataTypes = clone(DEFAULT_DATA_TYPES);
     textNotes = [];
     commentImageData = "";
+    areas = [];
+    currentAreaId = "";
+    pendingDeleteAreaId = null;
+    areaModalFromManage = false;
+    sideLabels = { N: "N", E: "E", S: "S", W: "W" };
     removeAllPointElements();
 
     const context = els.commentCanvas.getContext("2d");
@@ -1063,13 +1169,14 @@ const Workspace = (() => {
     pageStates[currentPdfPage] = {
       points: clone(points), dataTypes: clone(dataTypes), textNotes: clone(textNotes),
       commentImageData, selectedDataId: els.dataSelect ? els.dataSelect.value : null,
-      scrollLeft: els.drawingWrapper.scrollLeft, scrollTop: els.drawingWrapper.scrollTop
+      scrollLeft: els.drawingWrapper.scrollLeft, scrollTop: els.drawingWrapper.scrollTop,
+      areas: clone(areas), currentAreaId
     };
   }
 
   function emptyPageState() {
     return { points: [], dataTypes: clone(DEFAULT_DATA_TYPES), textNotes: [], commentImageData: "",
-      selectedDataId: DEFAULT_DATA_TYPES[0].id, scrollLeft: 0, scrollTop: 0 };
+      selectedDataId: DEFAULT_DATA_TYPES[0].id, scrollLeft: 0, scrollTop: 0, areas: [], currentAreaId: "" };
   }
 
   async function goToPdfPage(pageNumber) {
@@ -1096,10 +1203,13 @@ const Workspace = (() => {
       dataTypes = clone(state.dataTypes || DEFAULT_DATA_TYPES);
       textNotes = clone(state.textNotes || []);
       commentImageData = state.commentImageData || "";
+      areas = clone(state.areas || []);
+      currentAreaId = state.currentAreaId || "";
       dataTypes.forEach(dt => { if (!Array.isArray(dt.lockedSides)) dt.lockedSides = []; });
 
       await renderStoredPdf(project.pdfData, target);
       renderDataSelect(state.selectedDataId);
+      updateAreaSwatch();
       points.forEach(createPointElement);
       textNotes.forEach(createTextNoteElement);
       if (commentImageData) await restoreCommentImage(commentImageData);
@@ -1543,6 +1653,229 @@ const Workspace = (() => {
     scheduleAutoSave();
   }
 
+  /*
+    Area is a lightweight, optional tag layered on top of the existing
+    Data Type + Side system — not a replacement for it. A point's Side and
+    the compass sort/export logic work exactly as before regardless of
+    Area; Area only adds an extra label you can filter and export by (e.g.
+    "Room 101", "Tower A"). Unlike Data Type, a point never NEEDS an area
+    — "No Area" is always a valid state — so deleting an area just clears
+    it from any points that had it, rather than requiring a reassignment
+    step first.
+  */
+  function updateAreaSwatch() {
+    if (els.areaPickerLabel) els.areaPickerLabel.textContent = areaLabel(currentAreaId);
+  }
+
+  function openAreaPicker() {
+    renderAreaPickerList();
+    els.areaPickerModal.classList.remove("hidden");
+  }
+
+  function renderAreaPickerList() {
+    if (!els.areaPickerList) return;
+    els.areaPickerList.innerHTML = "";
+
+    const noneRow = document.createElement("button");
+    noneRow.type = "button";
+    noneRow.className = "dataTypePickerRow";
+    noneRow.classList.toggle("activeDataType", !currentAreaId);
+    const noneName = document.createElement("span");
+    noneName.className = "dataTypePickerRowName";
+    noneName.textContent = "No Area";
+    const noneCount = document.createElement("span");
+    noneCount.className = "dataTypePickerRowCount";
+    const noAreaCount = points.filter(point => !point.areaId).length;
+    noneCount.textContent = noAreaCount === 1 ? "1 point" : `${noAreaCount} points`;
+    noneRow.append(noneName, noneCount);
+    noneRow.addEventListener("click", () => {
+      currentAreaId = "";
+      updateAreaSwatch();
+      scheduleAutoSave();
+      els.areaPickerModal.classList.add("hidden");
+    });
+    els.areaPickerList.appendChild(noneRow);
+
+    areas.forEach(area => {
+      const pointCount = points.filter(point => point.areaId === area.id).length;
+
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "dataTypePickerRow";
+      row.classList.toggle("activeDataType", area.id === currentAreaId);
+
+      const name = document.createElement("span");
+      name.className = "dataTypePickerRowName";
+      name.textContent = area.name;
+
+      const count = document.createElement("span");
+      count.className = "dataTypePickerRowCount";
+      count.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
+
+      row.append(name, count);
+      row.addEventListener("click", () => {
+        currentAreaId = area.id;
+        updateAreaSwatch();
+        scheduleAutoSave();
+        els.areaPickerModal.classList.add("hidden");
+      });
+
+      els.areaPickerList.appendChild(row);
+    });
+  }
+
+  function confirmArea() {
+    const name = els.areaNameInput.value.trim();
+
+    if (!name) {
+      alert("Enter an area name.");
+      return;
+    }
+
+    const area = { id: "area_" + Date.now(), name };
+    areas.push(area);
+
+    els.areaModal.classList.add("hidden");
+    scheduleAutoSave();
+
+    if (areaModalFromManage) {
+      areaModalFromManage = false;
+      renderManageAreasList();
+      els.manageAreasModal.classList.remove("hidden");
+    } else {
+      currentAreaId = area.id;
+      updateAreaSwatch();
+    }
+  }
+
+  function openManageAreasModal() {
+    renderManageAreasList();
+    els.manageAreasModal.classList.remove("hidden");
+  }
+
+  function renderManageAreasList() {
+    if (!els.manageAreasList) return;
+    els.manageAreasList.innerHTML = "";
+
+    if (!areas.length) {
+      const empty = document.createElement("p");
+      empty.className = "manageDataTypesHint";
+      empty.textContent = "No areas yet — add one below. Areas are optional; points without one just show as \"No Area\".";
+      els.manageAreasList.appendChild(empty);
+    }
+
+    areas.forEach(area => {
+      const pointCount = points.filter(point => point.areaId === area.id).length;
+
+      const row = document.createElement("div");
+      row.className = "manageDataTypeRow";
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = area.name;
+      nameInput.title = "Name";
+      nameInput.addEventListener("change", () => {
+        const trimmed = nameInput.value.trim();
+        if (!trimmed) { nameInput.value = area.name; return; }
+        area.name = trimmed;
+        updateAreaSwatch();
+        scheduleAutoSave();
+      });
+
+      const countLabel = document.createElement("span");
+      countLabel.className = "manageDataTypeCount";
+      countLabel.textContent = pointCount === 1 ? "1 point" : `${pointCount} points`;
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "manageDataTypeDeleteBtn";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", () => deleteArea(area.id));
+
+      row.append(nameInput, countLabel, deleteBtn);
+      els.manageAreasList.appendChild(row);
+    });
+  }
+
+  function deleteArea(areaId) {
+    const area = getArea(areaId);
+    if (!area) return;
+
+    const affectedCount = points.filter(point => point.areaId === areaId).length;
+    const message = affectedCount
+      ? `Delete the area "${area.name}"? Its ${affectedCount} point(s) will become unassigned ("No Area") — they will NOT be deleted.`
+      : `Delete the area "${area.name}"?`;
+    if (!confirm(message)) return;
+
+    points.forEach(point => { if (point.areaId === areaId) point.areaId = ""; });
+    areas = areas.filter(a => a.id !== areaId);
+    if (currentAreaId === areaId) currentAreaId = "";
+
+    updateAreaSwatch();
+    renderManageAreasList();
+    refreshAllPoints();
+    scheduleAutoSave();
+  }
+
+  /*
+    Side relabeling is purely cosmetic: it changes the DISPLAY text shown
+    for N/E/S/W in the side-picker buttons and CSV headers. The underlying
+    letter codes, compass sort logic, corner adjacency, and on-canvas point
+    labels (e.g. "N3") are completely unaffected — renaming "N" to "Front"
+    does not change how Auto Sort or exports behave, only what a human
+    reads in a few UI spots.
+  */
+  function sideDisplayLabel(side) {
+    return (sideLabels && sideLabels[side]) || side;
+  }
+
+  function openRenameSidesModal() {
+    if (!els.renameSidesModal) return;
+    ["N", "E", "S", "W"].forEach(side => {
+      const input = els["renameSide" + side + "Input"];
+      if (input) input.value = sideLabels[side] || side;
+    });
+    els.renameSidesModal.classList.remove("hidden");
+  }
+
+  function confirmRenameSides() {
+    ["N", "E", "S", "W"].forEach(side => {
+      const input = els["renameSide" + side + "Input"];
+      if (!input) return;
+      const trimmed = input.value.trim();
+      sideLabels[side] = trimmed || side;
+    });
+    els.renameSidesModal.classList.add("hidden");
+    refreshSideLabelDisplays();
+    scheduleAutoSave();
+  }
+
+  function resetRenameSides() {
+    sideLabels = { N: "N", E: "E", S: "S", W: "W" };
+    ["N", "E", "S", "W"].forEach(side => {
+      const input = els["renameSide" + side + "Input"];
+      if (input) input.value = side;
+    });
+    refreshSideLabelDisplays();
+    scheduleAutoSave();
+  }
+
+  // Re-applies custom side labels everywhere they're shown outside the
+  // canvas itself (side-picker buttons, Auto Sort's side dropdown).
+  function refreshSideLabelDisplays() {
+    document.querySelectorAll(".sideBtn[data-side]").forEach(button => {
+      const side = button.dataset.side;
+      if (side) button.textContent = sideDisplayLabel(side);
+    });
+    if (els.autoSortSide) {
+      Array.from(els.autoSortSide.options).forEach(option => {
+        if (["N", "E", "S", "W"].includes(option.value)) {
+          option.textContent = sideDisplayLabel(option.value);
+        }
+      });
+    }
+  }
+
   function setPointMode(mode) {
     pointMode = mode;
     movingPoint = null;
@@ -1669,7 +2002,8 @@ const Workspace = (() => {
       moveDistance: 0,
       excluded: false,
       assignedSide: currentSide,
-      assignedSeq: ""
+      assignedSeq: "",
+      areaId: currentAreaId
     };
 
     points.push(point);
@@ -1858,7 +2192,9 @@ const Workspace = (() => {
     element.style.top = point.y + "px";
     element.style.color = dataType?.color || "black";
     element.style.fontSize = labelFontSize + "px";
-    const visibleInReview = workspaceMode !== "review" || reviewFilter === "all" || point.dataId === reviewFilter;
+    const matchesDataTypeFilter = reviewFilter === "all" || point.dataId === reviewFilter;
+    const matchesAreaFilter = reviewAreaFilter === "all" || (point.areaId || "") === reviewAreaFilter;
+    const visibleInReview = workspaceMode !== "review" || (matchesDataTypeFilter && matchesAreaFilter);
     element.classList.toggle("reviewFilteredOut", !visibleInReview);
     element.setAttribute("aria-hidden", visibleInReview ? "false" : "true");
     element.classList.toggle("excludedPoint", !!point.excluded);
@@ -2289,30 +2625,51 @@ const Workspace = (() => {
     };
   }
 
-  function autoSortSide(dataId, side, direction = "clockwise", method = "position") {
+  function autoSortSide(dataId, side, direction = "clockwise", method = "position", areaFilter = "__all__") {
     const dataType = getDataType(dataId);
     if (!dataType) return;
     const clockwise = direction !== "counterclockwise";
-    let sorted;
+    const allSidePoints = pointsInSide(dataId, side);
+    const targetPoints = areaFilter === "__all__"
+      ? allSidePoints
+      : allSidePoints.filter(point => (point.areaId || "") === areaFilter);
 
+    let sortedTarget;
     if (method === "angle") {
       const center = roomCenterForDataType(dataId);
-      sorted = sortPointsByAngle(pointsInSide(dataId, side), clockwise, center);
+      sortedTarget = sortPointsByAngle(targetPoints, clockwise, center);
     } else {
       // Straight-wall method: a plain coordinate sort along the side's own
       // axis. No centroid or angle math at all, so there is nothing for
       // measurement jitter to destabilize — the right choice whenever a
       // wall is straight (or close to it). Use "Curved wall" only for
       // walls with real, visible curvature.
-      sorted = pointsInSide(dataId, side).slice();
+      sortedTarget = targetPoints.slice();
       const ascending = clockwise
         ? (side === "N" || side === "E")
         : (side === "S" || side === "W");
       if (side === "E" || side === "W") {
-        sorted.sort((a, b) => ascending ? a.y - b.y : b.y - a.y);
+        sortedTarget.sort((a, b) => ascending ? a.y - b.y : b.y - a.y);
       } else {
-        sorted.sort((a, b) => ascending ? a.x - b.x : b.x - a.x);
+        sortedTarget.sort((a, b) => ascending ? a.x - b.x : b.x - a.x);
       }
+    }
+
+    // When an area filter narrows the group to a subset of the side, the
+    // OTHER points on that same side (a different area, or no area) must
+    // not move — they act as fixed anchors, and the target subset resorts
+    // among itself and slots into the gaps between them. This reuses the
+    // exact same merge used for Auto Sort Review's per-point partial
+    // apply; with no area filter (the normal case) it's a no-op and
+    // behaves exactly as before.
+    let sorted;
+    if (targetPoints.length === allSidePoints.length) {
+      sorted = sortedTarget;
+    } else {
+      const beforeList = allSidePoints.slice().sort((a, b) => (a.manualSeq || 0) - (b.manualSeq || 0));
+      const nonMatchingUids = new Set(allSidePoints.filter(p => !targetPoints.includes(p)).map(p => p.uid));
+      const afterList = [...sortedTarget, ...beforeList.filter(p => nonMatchingUids.has(p.uid))];
+      sorted = buildPartialOrder(beforeList, afterList, nonMatchingUids);
     }
 
     if (!Array.isArray(dataType.lockedSides)) dataType.lockedSides = [];
@@ -3231,6 +3588,30 @@ const Workspace = (() => {
       choice.checked = choice.value === lastAutoSortMethod;
     });
 
+    if (els.autoSortAreaField && els.autoSortArea) {
+      if (areas.length) {
+        els.autoSortAreaField.classList.remove("hidden");
+        const previousArea = els.autoSortArea.value || "__all__";
+        els.autoSortArea.innerHTML = "";
+        const allAreasOption = document.createElement("option");
+        allAreasOption.value = "__all__";
+        allAreasOption.textContent = "All Areas";
+        els.autoSortArea.appendChild(allAreasOption);
+        areas.forEach(area => {
+          const option = document.createElement("option");
+          option.value = area.id;
+          option.textContent = area.name;
+          els.autoSortArea.appendChild(option);
+        });
+        els.autoSortArea.value = ["__all__", ...areas.map(a => a.id)].includes(previousArea)
+          ? previousArea
+          : "__all__";
+      } else {
+        els.autoSortAreaField.classList.add("hidden");
+        els.autoSortArea.innerHTML = '<option value="__all__">All Areas</option>';
+      }
+    }
+
     hideAutoSortNoDataMessage();
 
     els.autoSortModal.classList.remove("hidden");
@@ -3259,6 +3640,7 @@ const Workspace = (() => {
   function confirmAutoSort() {
     const dataSelection = els.autoSortDataType.value;
     const sideSelection = els.autoSortSide.value;
+    const areaSelection = (els.autoSortArea && areas.length) ? els.autoSortArea.value : "__all__";
     const selectedDirection = els.autoSortDirectionChoices.find(choice => choice.checked);
     const direction = selectedDirection ? selectedDirection.value : "clockwise";
     const selectedMethod = els.autoSortMethodChoices.find(choice => choice.checked);
@@ -3270,12 +3652,16 @@ const Workspace = (() => {
       setStatus("Choose a valid data type.");
       return;
     }
+    const pointsForTarget = (dataId, side) => areaSelection === "__all__"
+      ? pointsInSide(dataId, side)
+      : pointsInSide(dataId, side).filter(point => (point.areaId || "") === areaSelection);
     const targets = [];
-    targetDataTypes.forEach(dt => targetSides.forEach(side => { if (pointsInSide(dt.id, side).length) targets.push({ dt, side }); }));
+    targetDataTypes.forEach(dt => targetSides.forEach(side => { if (pointsForTarget(dt.id, side).length) targets.push({ dt, side }); }));
     if (!targets.length) {
       const typeLabel = dataSelection === "__all__" ? "any data type" : (targetDataTypes[0] ? targetDataTypes[0].name : "this data type");
-      const sideLabel = sideSelection === "__all__" ? "any side" : sideSelection;
-      showAutoSortNoDataMessage(`No data: there are no assigned points for ${typeLabel} on ${sideLabel}.`);
+      const sideLabel = sideSelection === "__all__" ? "any side" : sideDisplayLabel(sideSelection);
+      const areaLabelText = areaSelection === "__all__" ? "" : ` in "${areaLabel(areaSelection)}"`;
+      showAutoSortNoDataMessage(`No data: there are no assigned points for ${typeLabel} on ${sideLabel}${areaLabelText}.`);
       setStatus("No matching assigned points to sort.");
       return;
     }
@@ -3289,7 +3675,7 @@ const Workspace = (() => {
 
     const before = {};
     targetDataTypes.forEach(dt => { before[dt.id] = snapshotOrder(dt.id); });
-    targets.forEach(({ dt, side }) => autoSortSide(dt.id, side, direction, method));
+    targets.forEach(({ dt, side }) => autoSortSide(dt.id, side, direction, method, areaSelection));
     targetDataTypes.forEach(dt => { dt.direction = direction; recalculateDataTypeOrder(dt.id); });
     const after = {};
     targetDataTypes.forEach(dt => { after[dt.id] = snapshotOrder(dt.id); });
@@ -3398,6 +3784,7 @@ const Workspace = (() => {
 
     if (workspaceMode === "review") {
       renderReviewDataTypeFilter();
+      renderReviewAreaFilter();
       // Review locks input: no new points, no active markup tool.
       pointMode = "lock";
       commentTool = "none";
@@ -3433,6 +3820,37 @@ const Workspace = (() => {
 
     reviewFilter = previous;
     els.reviewDataTypeFilter.value = previous;
+  }
+
+  function renderReviewAreaFilter() {
+    if (!els.reviewAreaFilter || !els.reviewAreaFilterWrap) return;
+
+    if (!areas.length) {
+      els.reviewAreaFilterWrap.classList.add("hidden");
+      reviewAreaFilter = "all";
+      return;
+    }
+    els.reviewAreaFilterWrap.classList.remove("hidden");
+
+    const previous = areas.some(area => area.id === reviewAreaFilter)
+      ? reviewAreaFilter
+      : "all";
+    els.reviewAreaFilter.innerHTML = "";
+
+    const allOption = document.createElement("option");
+    allOption.value = "all";
+    allOption.textContent = "All Areas";
+    els.reviewAreaFilter.appendChild(allOption);
+
+    areas.forEach(area => {
+      const option = document.createElement("option");
+      option.value = area.id;
+      option.textContent = `${area.name} (${points.filter(point => point.areaId === area.id).length})`;
+      els.reviewAreaFilter.appendChild(option);
+    });
+
+    reviewAreaFilter = previous;
+    els.reviewAreaFilter.value = previous;
   }
 
   function setCurrentSide(side) {
@@ -4459,11 +4877,13 @@ const Workspace = (() => {
       );
 
       const headers = [];
+      const includeAreaColumn = areas.length > 0;
       exportTypes.forEach(dataType => {
         headers.push(dataType.name + " Side");
         headers.push(dataType.name + " Seq");
         headers.push(dataType.name + " Measurement");
         headers.push(dataType.name + " Measurement (Decimal)");
+        if (includeAreaColumn) headers.push(dataType.name + " Area");
         headers.push(dataType.name + " Warning");
       });
 
@@ -4476,17 +4896,20 @@ const Workspace = (() => {
           const item = grouped[dataType.id][rowIndex];
 
           if (!item) {
-            row.push(cleanCSV(""), cleanCSV(""), cleanCSV(""), cleanCSV(""), cleanCSV(""));
+            row.push(cleanCSV(""), cleanCSV(""), cleanCSV(""), cleanCSV(""));
+            if (includeAreaColumn) row.push(cleanCSV(""));
+            row.push(cleanCSV(""));
             return;
           }
 
           const point = item.point;
 
-          row.push(cleanCSV(item.side || "Unassigned"));
+          row.push(cleanCSV(sideDisplayLabel(item.side) || "Unassigned"));
           row.push(cleanCSV(item.seq));
           row.push(cleanCSVMeasurement(point.measurement));
           const decimal = measurementToDecimal(point.measurement);
           row.push(cleanCSV(decimal === null ? "" : decimal));
+          if (includeAreaColumn) row.push(cleanCSV(areaLabel(point.areaId)));
 
           const notes = [];
           if (point.moveDistance > 80) {
@@ -4773,7 +5196,8 @@ const Workspace = (() => {
       brushColor,
       brushWidth,
       scrollLeft: els.drawingWrapper.scrollLeft,
-      scrollTop: els.drawingWrapper.scrollTop
+      scrollTop: els.drawingWrapper.scrollTop,
+      sideLabels
     };
 
     await ProjectDB.saveProject(project);
@@ -5187,6 +5611,16 @@ const Workspace = (() => {
 
   function getDataType(id) {
     return dataTypes.find(dataType => dataType.id === id);
+  }
+
+  function getArea(id) {
+    return areas.find(area => area.id === id);
+  }
+
+  function areaLabel(id) {
+    if (!id) return "No Area";
+    const area = getArea(id);
+    return area ? area.name : "No Area";
   }
 
   function findPointElement(uid) {

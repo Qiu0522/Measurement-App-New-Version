@@ -1625,6 +1625,17 @@ button {
   margin: 0 4px;
 }
 
+.areaSwatchIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-color: transparent;
+  font-size: 12px;
+  line-height: 1;
+  color: inherit;
+}
+
 /* ---------- Unified Auto Sort dialog ---------- */
 .autoSortCard {
   width: min(460px, calc(100vw - 28px));

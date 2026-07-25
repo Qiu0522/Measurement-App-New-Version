@@ -1,3 +1,46 @@
+FIELD MEASUREMENT VERSION 6.11-NEW
+
+VERSION 6.11-NEW — AREA: AN OPTIONAL LABEL ON TOP OF THE EXISTING SYSTEM
+- Added Area as a lightweight, optional tag layered on top of the
+  existing Data Type + Side system — not a replacement for it. Side
+  assignment, the compass sort logic, and on-canvas point labels (e.g.
+  "N3") all work exactly as before regardless of whether Areas are used
+  at all.
+  - Toolbar "Area" picker button next to Data Type. Pick a "current
+    area" (or "No Area") and new points inherit it automatically — same
+    pattern as picking a current Side.
+  - Manage Areas modal: add, rename inline, or delete. Deleting an area
+    never deletes or reassigns points — it just clears the tag, leaving
+    them as "No Area".
+  - Rename Sides modal: give N/E/S/W custom display labels (e.g. "Front
+    Wall"). This is purely cosmetic — it changes what a human reads in
+    the side picker, Auto Sort's side dropdown, and CSV headers/values;
+    it does not touch the underlying letter codes, sort direction
+    conventions, or point-label format.
+  - Auto Sort gained an optional Area filter. Scoping a sort to one area
+    leaves every other point on that same side — a different area, or no
+    area — completely untouched, even when their points are physically
+    interleaved along the same wall. (Reuses the same "fixed anchor"
+    merge logic already proven by Auto Sort Review's per-point partial
+    apply.)
+  - CSV export gained an optional "Area" column, which only appears at
+    all if the project actually has areas defined.
+  - Review mode gained an optional Area filter, mirroring the existing
+    Data Type filter, hidden unless the project has areas.
+- All of the above stays completely out of the way for anyone who never
+  uses Areas: the Area/Rename Sides UI adds one small toolbar button, and
+  every dropdown/column that depends on areas existing stays hidden until
+  an area is actually created.
+- Verified live: area tagging and persistence, Area-scoped Auto Sort with
+  two areas' points interleaved on the same wall (the harder case), CSV
+  export with both the Area column and a renamed side flowing through
+  correctly together with the fraction-protection from 6.10.5, and the
+  Review Area filter's show/hide and point-filtering behavior. Re-ran the
+  full existing regression suite (stress test, partial apply, curved-wall
+  sort, method choice, no-data message, state reset) against a
+  non-Area project to confirm zero behavior change for existing usage.
+- sw.js CACHE_VERSION bumped to v1-v2-33-area-feature.
+
 FIELD MEASUREMENT VERSION 6.10.6-NEW-3
 
 VERSION 6.10.6-NEW-3 — FIXED UI STATE LEAKING BETWEEN PROJECTS
