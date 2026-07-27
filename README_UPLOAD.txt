@@ -1,3 +1,28 @@
+FIELD MEASUREMENT VERSION 6.11.1-NEW
+
+VERSION 6.11.1-NEW — ORDER LABEL: RENAME REFRESH FIX + AREA IN THE LABEL
+- Found and fixed a real bug: renaming a side (e.g. N -> "1") updated the
+  side-picker buttons and Auto Sort's dropdown immediately, but did
+  nothing to the labels of points already placed on the canvas — they
+  kept showing their old text until some unrelated redraw happened to
+  touch them. Renaming now immediately refreshes every point's label.
+- The on-canvas order label already used the "Side-Seq" dash format (e.g.
+  "N-1") and already respected a renamed side's custom label — that part
+  was working, just invisible while the refresh bug hid it.
+- Area is now included directly in the order label when a point has one,
+  merged onto the same line as the (up to 6-character) area name, e.g.
+  "Room 1-N-3". A point with no area shows exactly the plain "N-3" —
+  untouched — so "no area" stays a quiet default rather than a visible
+  state of its own.
+- Matching that same idea, CSV export's Area column now shows blank for
+  points with no area instead of the literal text "No Area".
+- Verified live: renaming a side updates an already-placed point's label
+  immediately with no reload needed; an area-tagged point's label merges
+  correctly with truncation ("Room 101" -> "Room 1-1-2"); CSV shows blank
+  for no-area points and the full untruncated name for tagged ones. Full
+  regression suite re-run clean afterward.
+- sw.js CACHE_VERSION bumped to v1-v2-34-area-label-fix.
+
 FIELD MEASUREMENT VERSION 6.11-NEW
 
 VERSION 6.11-NEW — AREA: AN OPTIONAL LABEL ON TOP OF THE EXISTING SYSTEM

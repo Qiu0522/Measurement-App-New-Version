@@ -1874,6 +1874,10 @@ const Workspace = (() => {
         }
       });
     }
+    // Already-placed points keep their previously-rendered label text until
+    // something re-touches them — without this, a rename doesn't visibly
+    // reach the canvas until an unrelated redraw happens to occur.
+    refreshAllPoints();
   }
 
   function setPointMode(mode) {
@@ -2185,7 +2189,7 @@ const Workspace = (() => {
 
     element.textContent =
       showOrderLabels && point.assignedSide && point.assignedSeq
-        ? `${point.assignedSide}${point.assignedSeq}`
+        ? pointOrderLabel(point)
         : measurement;
 
     element.style.left = point.x + "px";
@@ -2684,8 +2688,8 @@ const Workspace = (() => {
   function pointDisplayName(point, seqOverride = null) {
     const dt = getDataType(point.dataId);
     const seq = seqOverride == null ? (point.assignedSeq || "?") : seqOverride;
-    const side = point.assignedSide || "Unassigned";
-    return `${dt ? dt.name : "Data"} · ${side}${seq}`;
+    const side = point.assignedSide ? sideDisplayLabel(point.assignedSide) : "Unassigned";
+    return `${dt ? dt.name : "Data"} · ${point.assignedSide ? `${side}-${seq}` : side}`;
   }
 
   function mapSnapshotPoints(snapshot) {
@@ -2873,9 +2877,25 @@ const Workspace = (() => {
   }
 
   function formatReviewCode(side, seq) {
-    const cleanSide = side || "?";
+    const cleanSide = side ? sideDisplayLabel(side) : "?";
     const cleanSeq = seq ?? "?";
     return `${cleanSide}-${cleanSeq}`;
+  }
+
+  // The on-canvas order label. A point with no area shows exactly the
+  // plain Side-Seq code, untouched. Only once a point actually has an
+  // area does anything area-related get added — merged into the same
+  // line as the area's (possibly truncated) name, so "no area" stays a
+  // quiet default rather than a visible state of its own.
+  function truncateAreaLabel(name, maxLength = 6) {
+    const trimmed = String(name || "").trim();
+    return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+  }
+
+  function pointOrderLabel(point) {
+    const sideCode = formatReviewCode(point.assignedSide, point.assignedSeq);
+    const area = point.areaId ? getArea(point.areaId) : null;
+    return area ? `${truncateAreaLabel(area.name)}-${sideCode}` : sideCode;
   }
 
   function flashReviewElement(element) {
@@ -4909,7 +4929,10 @@ const Workspace = (() => {
           row.push(cleanCSVMeasurement(point.measurement));
           const decimal = measurementToDecimal(point.measurement);
           row.push(cleanCSV(decimal === null ? "" : decimal));
-          if (includeAreaColumn) row.push(cleanCSV(areaLabel(point.areaId)));
+          if (includeAreaColumn) {
+            const pointArea = point.areaId ? getArea(point.areaId) : null;
+            row.push(cleanCSV(pointArea ? pointArea.name : ""));
+          }
 
           const notes = [];
           if (point.moveDistance > 80) {
@@ -5324,10 +5347,12 @@ const Workspace = (() => {
 
     const term = reviewSearchTerm;
 
-    const matchesTerm = (tagText, valText) =>
-      !term ||
-      tagText.toLowerCase().includes(term) ||
-      valText.toLowerCase().includes(term);
+    const matchesTerm = (tagText, valText) => {
+      if (!term) return true;
+      const normalizedTag = tagText.toLowerCase().replace(/-/g, "");
+      const normalizedTerm = term.replace(/-/g, "");
+      return normalizedTag.includes(normalizedTerm) || valText.toLowerCase().includes(term);
+    };
 
     shownTypes.forEach(dt => {
       const section = document.createElement("div");
@@ -5343,7 +5368,7 @@ const Workspace = (() => {
       let visibleRows = 0;
 
       list.forEach(item => {
-        const tagText = (item.side || "U") + item.seq;
+        const tagText = (item.side ? sideDisplayLabel(item.side) : "U") + "-" + item.seq;
         const valText = item.point.measurement || "(empty)";
         if (!matchesTerm(tagText, valText)) return;
 
@@ -5434,13 +5459,13 @@ const Workspace = (() => {
     for (const dt of shownTypes) {
       const list = getOrderedPoints(dt.id);
       const match = list.find(item => {
-        const tag = ((item.side || "U") + item.seq).toLowerCase();
+        const tag = ((item.side ? sideDisplayLabel(item.side) : "U") + item.seq).toLowerCase().replace(/-/g, "");
         const val = String(item.point.measurement || "").toLowerCase();
-        return tag.includes(term) || val.includes(term);
+        return tag.includes(term.replace(/-/g, "")) || val.includes(term);
       });
       if (match) {
         jumpToPoint(match.point);
-        setStatus(`Found ${(match.side || "U") + match.seq}.`);
+        setStatus(`Found ${(match.side ? sideDisplayLabel(match.side) : "U")}-${match.seq}.`);
         return;
       }
     }
