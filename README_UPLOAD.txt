@@ -1,3 +1,45 @@
+FIELD MEASUREMENT VERSION 6.11.3-NEW
+
+VERSION 6.11.3-NEW — AUTO SORT METHOD SMART-DEFAULT + "NO AREA" RESTRUCTURE
+- Auto Sort now defaults to "Curved wall" (angle-based) instead of
+  "Straight wall" whenever a project has custom (non-N/E/S/W) side
+  labels. The straight-wall method hardcodes which literal axis N/E/S/W
+  run along, which only holds for real compass geometry — once sides are
+  renamed to something like 1/2/3/4, that assumption may no longer match
+  the actual shape and can silently sort wrong without erroring. Angle-
+  based has no such assumption. This is only a starting suggestion: the
+  moment you pick a method yourself in a project, that choice sticks for
+  the rest of the session, project after project reopen included.
+- Restructured the Area Picker: "No Area" is no longer a row in the same
+  list as real areas. It's now a separate "✕ No area for new points"
+  control above the list, visually distinct rather than styled as a peer
+  of actual named areas — matching how a point with no area was already
+  treated as a quiet default everywhere else (the label, CSV export).
+- Verified live: method defaults to angle after a side rename, reverts
+  to respecting an explicit choice once one is made, and the Area Picker
+  list contains zero rows when no areas are defined (previously it always
+  showed at least the "No Area" row). Full regression suite re-run clean
+  afterward.
+- sw.js CACHE_VERSION bumped to v1-v2-36-method-default-area-ui.
+
+FIELD MEASUREMENT VERSION 6.11.2-NEW
+
+VERSION 6.11.2-NEW — IMPORT FILE: SELECT MULTIPLE FILES AT ONCE
+- Library > Import File now lets you select several .fmfile.json files in
+  one go from the file picker, instead of one at a time.
+- Every selected file is processed, even if one of them fails — a
+  corrupt or unrecognized file no longer blocks the rest of the batch.
+  One combined summary reports how many imported successfully and lists
+  exactly which files (if any) failed and why.
+- This is in addition to the existing bundled-multi-project single-file
+  format, which still works the same as before.
+- Verified live: exported two projects, deleted them, then re-imported
+  both at once from a single file-picker selection — both reappeared
+  correctly with one summary alert. Also tested a mixed batch (one valid
+  file + one corrupt file): the valid one imported successfully and the
+  corrupt one was reported clearly, without losing the good import.
+- sw.js CACHE_VERSION bumped to v1-v2-35-multi-file-import.
+
 FIELD MEASUREMENT VERSION 6.11.1-NEW
 
 VERSION 6.11.1-NEW — ORDER LABEL: RENAME REFRESH FIX + AREA IN THE LABEL

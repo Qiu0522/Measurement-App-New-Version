@@ -85,6 +85,7 @@ const Workspace = (() => {
   let lastAutoSortSide = "N";
   let lastAutoSortDirection = "clockwise";
   let lastAutoSortMethod = "position";
+  let autoSortMethodExplicitlySet = false;
   let pendingAutoSortReview = null;
   let autoSortReviewFilter = "all";
   let rejectedChangeUids = new Set();
@@ -192,6 +193,9 @@ const Workspace = (() => {
     els.autoSortSide = document.getElementById("autoSortSide");
     els.autoSortDirectionChoices = Array.from(document.querySelectorAll('input[name="autoSortDirection"]'));
     els.autoSortMethodChoices = Array.from(document.querySelectorAll('input[name="autoSortMethod"]'));
+    els.autoSortMethodChoices.forEach(choice => {
+      choice.addEventListener("change", () => { autoSortMethodExplicitlySet = true; });
+    });
     els.autoSortNoDataMessage = document.getElementById("autoSortNoDataMessage");
     els.confirmAutoSortBtn = document.getElementById("confirmAutoSortBtn");
     els.cancelAutoSortBtn = document.getElementById("cancelAutoSortBtn");
@@ -276,6 +280,7 @@ const Workspace = (() => {
     els.reassignDataTypeList = document.getElementById("reassignDataTypeList");
 
     els.areaPickerBtn = document.getElementById("areaPickerBtn");
+    els.clearAreaBtn = document.getElementById("clearAreaBtn");
     els.areaPickerModal = document.getElementById("areaPickerModal");
     els.areaPickerList = document.getElementById("areaPickerList");
     els.areaPickerLabel = document.getElementById("areaPickerLabel");
@@ -813,6 +818,14 @@ const Workspace = (() => {
 
     if (els.areaPickerBtn) {
       els.areaPickerBtn.addEventListener("click", openAreaPicker);
+      if (els.clearAreaBtn) {
+        els.clearAreaBtn.addEventListener("click", () => {
+          currentAreaId = "";
+          updateAreaSwatch();
+          scheduleAutoSave();
+          els.areaPickerModal.classList.add("hidden");
+        });
+      }
       els.cancelAreaPickerBtn.addEventListener("click", () => {
         els.areaPickerModal.classList.add("hidden");
       });
@@ -976,6 +989,8 @@ const Workspace = (() => {
     stuck that way in whatever project is opened next.
   */
   function resetTransientUiState() {
+    autoSortMethodExplicitlySet = false;
+
     pinchActive = false;
     pinchStartDist = 0;
     pinchStartZoom = 1;
@@ -1676,25 +1691,13 @@ const Workspace = (() => {
     if (!els.areaPickerList) return;
     els.areaPickerList.innerHTML = "";
 
-    const noneRow = document.createElement("button");
-    noneRow.type = "button";
-    noneRow.className = "dataTypePickerRow";
-    noneRow.classList.toggle("activeDataType", !currentAreaId);
-    const noneName = document.createElement("span");
-    noneName.className = "dataTypePickerRowName";
-    noneName.textContent = "No Area";
-    const noneCount = document.createElement("span");
-    noneCount.className = "dataTypePickerRowCount";
-    const noAreaCount = points.filter(point => !point.areaId).length;
-    noneCount.textContent = noAreaCount === 1 ? "1 point" : `${noAreaCount} points`;
-    noneRow.append(noneName, noneCount);
-    noneRow.addEventListener("click", () => {
-      currentAreaId = "";
-      updateAreaSwatch();
-      scheduleAutoSave();
-      els.areaPickerModal.classList.add("hidden");
-    });
-    els.areaPickerList.appendChild(noneRow);
+    if (els.clearAreaBtn) {
+      const noAreaCount = points.filter(point => !point.areaId).length;
+      els.clearAreaBtn.textContent = noAreaCount
+        ? `✕ No area for new points (${noAreaCount} point${noAreaCount === 1 ? "" : "s"} currently untagged)`
+        : "✕ No area for new points";
+      els.clearAreaBtn.classList.toggle("activeDataType", !currentAreaId);
+    }
 
     areas.forEach(area => {
       const pointCount = points.filter(point => point.areaId === area.id).length;
@@ -3604,8 +3607,16 @@ const Workspace = (() => {
       choice.checked = choice.value === lastAutoSortDirection;
     });
 
+    // The straight-wall method hardcodes which axis N/E/S/W run along,
+    // which only holds true for real compass geometry. If sides have been
+    // renamed away from N/E/S/W, that assumption may no longer match the
+    // actual shape, so suggest angle-based instead — but only as a
+    // starting suggestion; once the operator picks a method for
+    // themselves in this project, their choice sticks from then on.
+    const usesCustomSideLabels = ["N", "E", "S", "W"].some(side => sideLabels[side] !== side);
+    const suggestedMethod = (!autoSortMethodExplicitlySet && usesCustomSideLabels) ? "angle" : lastAutoSortMethod;
     els.autoSortMethodChoices.forEach(choice => {
-      choice.checked = choice.value === lastAutoSortMethod;
+      choice.checked = choice.value === suggestedMethod;
     });
 
     if (els.autoSortAreaField && els.autoSortArea) {

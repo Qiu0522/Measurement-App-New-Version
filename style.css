@@ -2222,6 +2222,29 @@ button {
   font-weight: 600;
 }
 
+.clearAreaBtn {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px dashed #b7bfca;
+  border-radius: 8px;
+  background: transparent;
+  color: #5b6472;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+.clearAreaBtn:active {
+  background: #f0f2f5;
+}
+.clearAreaBtn.activeDataType {
+  border-style: solid;
+  border-color: #2b6ef2;
+  background: #eef4ff;
+  color: #2b6ef2;
+}
+
 .dataTypePickerRow .dataTypePickerRowSwatch {
   flex: none;
   width: 20px;

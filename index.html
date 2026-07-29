@@ -58,7 +58,7 @@
       </div>
     </header>
 
-    <input id="importFileInput" type="file" accept=".json,application/json" class="hidden">
+    <input id="importFileInput" type="file" accept=".json,application/json" multiple class="hidden">
 
     <div class="libraryNavigation">
       <button id="upFolderBtn" class="toolbarButton" type="button" disabled>← Back</button>
@@ -658,7 +658,9 @@
   <div id="areaPickerModal" class="modalBackdrop hidden">
     <div class="modalCard dataTypePickerCard">
       <h2>Choose Area</h2>
-      <p class="manageDataTypesHint">Optional — tag new points with an area (e.g. "Room 101") on top of their Data Type and Side. Leave as "No Area" if you don't need this.</p>
+      <p class="manageDataTypesHint">Optional — tag new points with an area (e.g. "Room 101") on top of their Data Type and Side.</p>
+
+      <button id="clearAreaBtn" type="button" class="clearAreaBtn">✕ No area for new points</button>
 
       <div id="areaPickerList" class="dataTypePickerList"></div>
 

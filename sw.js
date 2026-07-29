@@ -18,7 +18,7 @@
   cached copies are cleared and every device picks up the new version.
 */
 
-const CACHE_VERSION = "field-measurement-NEW-v1-v2-34-area-label-fix";
+const CACHE_VERSION = "field-measurement-NEW-v1-v2-36-method-default-area-ui";
 const CACHE_NAME = CACHE_VERSION;
 
 // Same-origin app shell, relative to the service worker location.

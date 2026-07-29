@@ -1001,52 +1001,78 @@ const App = (() => {
   }
 
   async function handleImportFile(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const fileList = Array.from(event.target.files || []);
+    if (!fileList.length) return;
 
-    let data;
-    try {
-      data = JSON.parse(await file.text());
-    } catch (error) {
-      alert("That file could not be read.");
-      return;
-    }
+    let importedCount = 0;
+    let legacyCount = 0;
+    const importedNames = [];
+    const failures = [];
 
-    if (isLegacyDataOnlyExport(data)) {
+    for (const file of fileList) {
+      let data;
       try {
-        const project = convertLegacyDataExport(data, currentFolderId);
-        await ProjectDB.saveProject(project);
-        await refreshLibrary();
-        alert(
-          `Imported "${project.name}" into this folder.\n\n` +
-          "This was an older data-only export with no background image, " +
-          "so it was placed on a blank drawing sized to fit the measurement points."
-        );
+        data = JSON.parse(await file.text());
       } catch (error) {
-        alert("Import failed: " + explainDbError(error));
+        failures.push(`${file.name}: could not be read (not valid JSON).`);
+        continue;
       }
-      return;
+
+      if (isLegacyDataOnlyExport(data)) {
+        try {
+          const project = convertLegacyDataExport(data, currentFolderId);
+          await ProjectDB.saveProject(project);
+          importedCount += 1;
+          legacyCount += 1;
+          importedNames.push(project.name);
+        } catch (error) {
+          failures.push(`${file.name}: ${explainDbError(error)}`);
+        }
+        continue;
+      }
+
+      if (!data || !["field-measurement-file", "field-measurement-files"].includes(data.format)) {
+        failures.push(`${file.name}: not a recognized single-file export.`);
+        continue;
+      }
+
+      try {
+        const bundledFiles = data.format === "field-measurement-files" && Array.isArray(data.files)
+          ? data.files : [data];
+        for (const fileData of bundledFiles) {
+          const project = await ProjectDB.importProject(fileData, currentFolderId);
+          importedCount += 1;
+          importedNames.push(project.name);
+        }
+      } catch (error) {
+        failures.push(`${file.name}: ${explainDbError(error)}`);
+      }
     }
 
-    if (!data || !["field-measurement-file", "field-measurement-files"].includes(data.format)) {
-      alert("That is not a single-file export. For a whole-library backup file, use Restore instead.");
-      return;
-    }
+    if (importedCount) await refreshLibrary();
+    if (!importedCount && !failures.length) return;
 
-    try {
-      const files = data.format === "field-measurement-files" && Array.isArray(data.files)
-        ? data.files : [data];
-      const imported = [];
-      for (const fileData of files) {
-        imported.push(await ProjectDB.importProject(fileData, currentFolderId));
-      }
-      await refreshLibrary();
-      alert(imported.length === 1
-        ? `Imported "${imported[0].name}" into this folder.`
-        : `Imported ${imported.length} work files into this folder.`);
-    } catch (error) {
-      alert("Import failed: " + explainDbError(error));
+    const parts = [];
+    if (importedCount === 1) {
+      parts.push(`Imported "${importedNames[0]}" into this folder.`);
+    } else if (importedCount > 1) {
+      parts.push(`Imported ${importedCount} work files into this folder.`);
     }
+    if (legacyCount) {
+      parts.push(
+        (legacyCount === importedCount
+          ? "These were older data-only exports with no background image, "
+          : `${legacyCount} of these were older data-only exports with no background image, `) +
+        "so they were placed on a blank drawing sized to fit the measurement points."
+      );
+    }
+    if (failures.length) {
+      parts.push(
+        (failures.length === 1 ? "1 file could not be imported:\n" : `${failures.length} files could not be imported:\n`) +
+        failures.map(line => "• " + line).join("\n")
+      );
+    }
+    alert(parts.join("\n\n"));
   }
 
   function updateBackupStatus() {
