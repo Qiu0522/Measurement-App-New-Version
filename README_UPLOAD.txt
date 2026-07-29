@@ -1,3 +1,46 @@
+FIELD MEASUREMENT VERSION 6.11.5-NEW
+
+VERSION 6.11.5-NEW — FIXED: EACH AREA NOW NUMBERS INDEPENDENTLY
+- Point numbering was scoped per side only, ignoring area — so two
+  different areas' points on the same wall shared one continuous count
+  (e.g. Room A: 1,2,3, Room B: 4,5). Numbering now restarts at 1 for
+  each area within a side, and areas never share a running count with
+  each other. "No area" is treated as its own independent group too, so
+  it doesn't share numbering with a named area on the same side either.
+- This is computed at the single shared source of the app's numbering
+  (the function every side's sequence numbers ultimately come from), so
+  it applies consistently everywhere: normal point placement, Auto
+  Sort (including the per-area "anchor" merge from 6.11), and the
+  on-canvas label.
+- Two points that legitimately now share the same number (e.g. both
+  "seq 1" in their own separate areas) remain fully distinguishable on
+  the canvas, since the area name is already part of the label (e.g.
+  "Room A-N-1" vs "Room B-N-1").
+- Note: a point's Seq column in CSV export will now show numbers
+  restarting per area rather than one running count per side — this is
+  the intended result of the fix, not a separate change.
+- Verified live: two areas' points interleaved on the same wall now
+  correctly number 1,2,3 and 1,2 independently rather than continuing to
+  4,5; on-canvas labels correctly disambiguate same-numbered points from
+  different areas. Full regression suite re-run clean afterward.
+- sw.js CACHE_VERSION bumped to v1-v2-38-area-numbering.
+
+FIELD MEASUREMENT VERSION 6.11.4-NEW
+
+VERSION 6.11.4-NEW — ADDED "VENT" DEFAULT DATA TYPE
+- Added a 5th default data type, "Vent", in yellow. Used a legible
+  amber-yellow (#e6b800) rather than pure yellow (#ffff00), since this
+  app uses a data type's color directly as its point labels' text color
+  on the canvas — pure yellow text would be nearly invisible against a
+  light background.
+- This only affects brand-new projects going forward (new projects start
+  with a fresh copy of the default data type list). Existing projects
+  keep whatever data types they already have — adding a new default does
+  not retroactively add "Vent" to projects you've already created.
+- Verified live: "Vent" appears correctly in the Data Type picker,
+  selecting it and placing a point applies the correct color.
+- sw.js CACHE_VERSION bumped to v1-v2-37-vent-datatype.
+
 FIELD MEASUREMENT VERSION 6.11.3-NEW
 
 VERSION 6.11.3-NEW — AUTO SORT METHOD SMART-DEFAULT + "NO AREA" RESTRUCTURE

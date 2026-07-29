@@ -5,7 +5,8 @@ const Workspace = (() => {
     { id: "data1", name: "测量落差", color: "#0066ff", counter: 1, export: true, ordered: false, direction: "clockwise" },
     { id: "data2", name: "Embed 距离", color: "#ff0000", counter: 1, export: true, ordered: false, direction: "clockwise" },
     { id: "data3", name: "二次测量Embed距离", color: "#00aa00", counter: 1, export: true, ordered: false, direction: "clockwise" },
-    { id: "data4", name: "完成后立柱测量尺寸", color: "#8000ff", counter: 1, export: true, ordered: false, direction: "clockwise" }
+    { id: "data4", name: "完成后立柱测量尺寸", color: "#8000ff", counter: 1, export: true, ordered: false, direction: "clockwise" },
+    { id: "data5", name: "Vent", color: "#e6b800", counter: 1, export: true, ordered: false, direction: "clockwise" }
   ];
 
   let project = null;
@@ -2509,8 +2510,23 @@ const Workspace = (() => {
     const result = [];
 
     SIDE_ORDER.forEach(side => {
-      orderedSidePoints(dataId, side).forEach((point, index) => {
-        result.push({ point, side, seq: index + 1 });
+      // Numbering restarts at 1 for each area within this side — areas
+      // (including "no area", its own implicit group) never share a
+      // running count with one another, even when their points are
+      // physically interleaved along the same wall. Splitting the
+      // side's already-ordered points by area (rather than re-sorting)
+      // preserves whatever relative order Auto Sort or manual placement
+      // already established within each area.
+      const groups = new Map();
+      orderedSidePoints(dataId, side).forEach(point => {
+        const key = point.areaId || "";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(point);
+      });
+      groups.forEach(groupPoints => {
+        groupPoints.forEach((point, index) => {
+          result.push({ point, side, seq: index + 1 });
+        });
       });
     });
 
